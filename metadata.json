@@ -1,0 +1,7 @@
+{
+  "name": "Chytrý Zápisník AI",
+  "description": "Aplikace pro chytré poznámky, která využívá AI k automatickému formátování, pojmenování a kategorizaci vašeho textu. Umožňuje snadnou správu, úpravy a vyhledávání poznámek.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
