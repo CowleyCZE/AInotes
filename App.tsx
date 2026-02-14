@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { Note, Category, AIAction, ChatMessage, LinkSuggestion } from './types';
-import { processNoteWithAI, formatAndAppendTextWithAI, performAIQuickAction, initializeChatWithNotes, findSmartConnections, createNoteFromAudio } from './services/geminiService';
+import { processNoteWithAI, formatAndAppendTextWithAI, performAIQuickAction, initializeChatWithNotes, findSmartConnections, createNoteFromAudio, analyzeLyricsRhymeAndMeter, RhymeAnalysis } from './services/geminiService';
 import { saveDataToFirestore, loadDataFromFirestore, deleteNoteFromFirestore } from './services/firebaseService';
 import { Chat, GenerateContentResponse } from "@google/genai";
 
@@ -302,6 +302,20 @@ export default function App() {
     const songwriterColors = ['bg-purple-900/40 border-purple-500', 'bg-teal-900/40 border-teal-500', 'bg-green-900/40 border-green-500', 'bg-orange-900/40 border-orange-500'];
     const songwriterTextColors = ['text-purple-300', 'text-teal-300', 'text-green-300', 'text-orange-300'];
     const songwriterBgSolid = ['bg-purple-600', 'bg-teal-600', 'bg-green-600', 'bg-orange-600'];
+
+    // Songwriter Mode - Scroll Sync Settings
+    const [syncScrollEnabled, setSyncScrollEnabled] = useState(true);
+    const [syncScrollMode, setSyncScrollMode] = useState<'percentage' | 'paragraph' | 'line'>('percentage');
+    const [activeScrollIndex, setActiveScrollIndex] = useState<number | null>(null);
+
+    // Songwriter Mode - Rhyme & Meter Analyzer
+    const [showRhymeAnalyzer, setShowRhymeAnalyzer] = useState(false);
+    const [rhymeAnalysis, setRhymeAnalysis] = useState<RhymeAnalysis | null>(null);
+    const [isAnalyzingRhyme, setIsAnalyzingRhyme] = useState(false);
+
+    // Songwriter Mode - Composition Panel Enhancement
+    const [autoNumbering, setAutoNumbering] = useState(true);
+    const [compositionSection, setCompositionSection] = useState<string | null>(null);
 
     const selectedNote = useMemo(() => notes.find(note => note.id === selectedNoteId), [notes, selectedNoteId]);
     
@@ -1007,20 +1021,61 @@ export default function App() {
         });
     };
 
-    const handleSyncScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        if (isSyncingScroll.current) return;
+    const handleSyncScroll = (e: React.UIEvent<HTMLDivElement>, noteIndex: number) => {
+        if (!syncScrollEnabled || isSyncingScroll.current) return;
         isSyncingScroll.current = true;
 
         const target = e.target as HTMLDivElement;
-        const percentage = target.scrollTop / (target.scrollHeight - target.clientHeight);
+        let scrollPosition = 0;
 
-        (Object.values(scrollSyncRefs.current) as (HTMLDivElement | null)[]).forEach(ref => {
-            if (ref && ref !== target) {
-                ref.scrollTop = percentage * (ref.scrollHeight - ref.clientHeight);
+        if (syncScrollMode === 'percentage') {
+            scrollPosition = target.scrollTop / (target.scrollHeight - target.clientHeight);
+            
+            (Object.values(scrollSyncRefs.current) as (HTMLDivElement | null)[]).forEach((ref, idx) => {
+                if (ref && ref !== target) {
+                    ref.scrollTop = scrollPosition * (ref.scrollHeight - ref.clientHeight);
+                }
+            });
+        } 
+        else if (syncScrollMode === 'paragraph') {
+            const paragraphs = target.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, br');
+            let currentParagraphIndex = 0;
+            
+            for (let i = 0; i < paragraphs.length; i++) {
+                const rect = paragraphs[i].getBoundingClientRect();
+                const containerRect = target.getBoundingClientRect();
+                if (rect.top >= containerRect.top) {
+                    currentParagraphIndex = i;
+                    break;
+                }
             }
-        });
 
-        setTimeout(() => { isSyncingScroll.current = false; }, 50);
+            (Object.values(scrollSyncRefs.current) as (HTMLDivElement | null)[]).forEach((ref) => {
+                if (ref && ref !== target) {
+                    const refParagraphs = ref.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, br');
+                    if (refParagraphs[currentParagraphIndex]) {
+                        refParagraphs[currentParagraphIndex].scrollIntoView({ behavior: 'auto', block: 'start' });
+                    }
+                }
+            });
+        }
+        else if (syncScrollMode === 'line') {
+            const LINE_HEIGHT = 24;
+            const currentLine = Math.floor(target.scrollTop / LINE_HEIGHT);
+
+            (Object.values(scrollSyncRefs.current) as (HTMLDivElement | null)[]).forEach((ref) => {
+                if (ref && ref !== target) {
+                    ref.scrollTop = currentLine * LINE_HEIGHT;
+                }
+            });
+        }
+
+        setActiveScrollIndex(noteIndex);
+
+        setTimeout(() => { 
+            isSyncingScroll.current = false; 
+            setTimeout(() => setActiveScrollIndex(null), 1000);
+        }, 50);
     };
 
     const addTextToComposition = (text: string, noteId: string, colorIndex: number) => {
@@ -1036,6 +1091,101 @@ export default function App() {
         }));
         
         setToast({ message: "Text přidán do kompozice", type: 'success' });
+    };
+
+    // --- LOCALSTORAGE AUTO-SAVE FOR COMPOSITION ---
+    const STORAGE_KEY = 'songwriter_composition_autosave';
+
+    const saveCompositionToLocalStorage = useCallback(() => {
+        if (isSongwriterMode && compositionContent) {
+            const data = {
+                content: compositionContent,
+                selectedNotes: selectedSongwriterNotes,
+                timestamp: Date.now()
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        }
+    }, [isSongwriterMode, compositionContent, selectedSongwriterNotes]);
+
+    const loadCompositionFromLocalStorage = useCallback(() => {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                if (data.content && data.selectedNotes) {
+                    return data;
+                }
+            } catch (e) {
+                console.error("Failed to load composition from localStorage", e);
+            }
+        }
+        return null;
+    }, []);
+
+    const clearCompositionLocalStorage = useCallback(() => {
+        localStorage.removeItem(STORAGE_KEY);
+    }, []);
+
+    // Auto-save every 30 seconds
+    useEffect(() => {
+        if (!isSongwriterMode) return;
+        
+        const interval = setInterval(() => {
+            saveCompositionToLocalStorage();
+            setToast({ message: "Kompozice uložena do LocalStorage", type: 'success' });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [isSongwriterMode, saveCompositionToLocalStorage]);
+
+    // Load composition when entering songwriter mode
+    useEffect(() => {
+        if (isSongwriterMode) {
+            const saved = loadCompositionFromLocalStorage();
+            if (saved && saved.content) {
+                setCompositionContent(saved.content);
+                setSelectedSongwriterNotes(saved.selectedNotes || []);
+                setToast({ message: "Kompozice obnovena z automatického uložení", type: 'success' });
+            }
+        }
+    }, [isSongwriterMode, loadCompositionFromLocalStorage]);
+
+    // Clear storage when closing composer
+    useEffect(() => {
+        if (!isSongwriterMode) {
+            clearCompositionLocalStorage();
+        }
+    }, [isSongwriterMode, clearCompositionLocalStorage]);
+
+    // --- RHYME & METER ANALYZER ---
+    const handleAnalyzeRhyme = async () => {
+        if (selectedSongwriterNotes.length === 0) {
+            setToast({ message: "Vyberte alespoň jednu verzi textu.", type: 'error' });
+            return;
+        }
+
+        const combinedLyrics = selectedSongwriterNotes
+            .map(noteId => notes.find(n => n.id === noteId)?.content || '')
+            .join('\n\n---\n\n');
+
+        if (!combinedLyrics.trim()) {
+            setToast({ message: "Vybrané poznámky neobsahují žádný text.", type: 'error' });
+            return;
+        }
+
+        setIsAnalyzingRhyme(true);
+        setShowRhymeAnalyzer(true);
+        setRhymeAnalysis(null);
+
+        try {
+            const result = await analyzeLyricsRhymeAndMeter(combinedLyrics);
+            setRhymeAnalysis(result);
+        } catch (error) {
+            console.error("Rhyme analysis error:", error);
+            setToast({ message: "Chyba analýzy. Zkuste to znovu.", type: 'error' });
+        } finally {
+            setIsAnalyzingRhyme(false);
+        }
     };
 
 
@@ -1134,30 +1284,186 @@ export default function App() {
         if (isSongwriterMode) {
              const isGridMode = selectedSongwriterNotes.length > 2;
              
-             return (
-                 <div className="flex flex-col h-full bg-gray-950 overflow-hidden">
-                     <header className="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4">
-                         <div className="flex items-center text-gray-200 font-bold">
-                             <MusicIcon className="mr-2 text-purple-500" /> Studio Skladatele
-                         </div>
-                         <button onClick={closeSongwriterMode} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded transition">
-                             <XIcon className="inline w-4 h-4 mr-1"/> Zavřít studio
-                         </button>
-                     </header>
-                     
-                     <div className="flex-1 overflow-hidden">
+              return (
+                  <div className="flex flex-col h-full bg-gray-950 overflow-hidden">
+                      <header className="h-auto min-h-[56px] bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 py-2 flex-wrap gap-2">
+                          <div className="flex items-center text-gray-200 font-bold">
+                              <MusicIcon className="mr-2 text-purple-500" /> Studio Skladatele
+                          </div>
+                          
+                          {/* Scroll Sync Controls */}
+                          <div className="flex items-center gap-3 flex-wrap">
+                              <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
+                                  <span className="text-xs text-gray-400">Sync:</span>
+                                  <button 
+                                      onClick={() => setSyncScrollEnabled(!syncScrollEnabled)}
+                                      className={`text-xs px-2 py-0.5 rounded transition ${syncScrollEnabled ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400'}`}
+                                  >
+                                      {syncScrollEnabled ? 'ON' : 'OFF'}
+                                  </button>
+                              </div>
+                              
+                              <div className="flex items-center gap-1 bg-gray-800 rounded-lg px-2 py-1">
+                                  <span className="text-xs text-gray-400 mr-1">Režim:</span>
+                                  <button 
+                                      onClick={() => setSyncScrollMode('percentage')}
+                                      className={`text-xs px-2 py-0.5 rounded transition ${syncScrollMode === 'percentage' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                                      title="Synchronizace podle procenta délky"
+                                  >
+                                      %
+                                  </button>
+                                  <button 
+                                      onClick={() => setSyncScrollMode('paragraph')}
+                                      className={`text-xs px-2 py-0.5 rounded transition ${syncScrollMode === 'paragraph' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                                      title="Synchronizace podle odstavce"
+                                  >
+                                      ¶
+                                  </button>
+                                  <button 
+                                      onClick={() => setSyncScrollMode('line')}
+                                      className={`text-xs px-2 py-0.5 rounded transition ${syncScrollMode === 'line' ? 'bg-cyan-600 text-white' : 'text-gray-400 hover:text-gray-200'}`}
+                                      title="Synchronizace podle řádku"
+                                  >
+                                      ≡
+                                  </button>
+                              </div>
+
+                              <button 
+                                  onClick={handleAnalyzeRhyme}
+                                  disabled={isAnalyzingRhyme}
+                                  className="text-sm bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded transition flex items-center gap-1"
+                              >
+                                  {isAnalyzingRhyme ? (
+                                      <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"/>
+                                  ) : (
+                                      <>
+                                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
+                                          Analýza
+                                      </>
+                                  )}
+                              </button>
+                          </div>
+                          
+                          <button onClick={closeSongwriterMode} className="text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1 rounded transition">
+                              <XIcon className="inline w-4 h-4 mr-1"/> Zavřít studio
+                          </button>
+                          </header>
+
+                      {/* Rhyme Analyzer Panel */}
+                      {showRhymeAnalyzer && (
+                          <div className="bg-gray-800 border-b border-gray-700 p-4 max-h-[40vh] overflow-y-auto">
+                              <div className="flex justify-between items-center mb-3">
+                                  <h3 className="text-lg font-bold text-purple-400 flex items-center">
+                                      <svg className="w-5 h-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+                                      </svg>
+                                      Analýza rýmů a metriky
+                                  </h3>
+                                  <button 
+                                      onClick={() => setShowRhymeAnalyzer(false)}
+                                      className="text-gray-400 hover:text-white"
+                                  >
+                                      <XIcon className="w-5 h-5" />
+                                  </button>
+                              </div>
+
+                              {isAnalyzingRhyme ? (
+                                  <div className="flex items-center justify-center py-8">
+                                      <div className="w-8 h-8 border-4 border-t-purple-500 border-gray-600 rounded-full animate-spin mr-3"></div>
+                                      <span className="text-gray-400">Analyzuji text...</span>
+                                  </div>
+                              ) : rhymeAnalysis ? (
+                                  <div className="space-y-4">
+                                      {/* Stats */}
+                                      <div className="grid grid-cols-3 gap-3">
+                                          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
+                                              <div className="text-2xl font-bold text-cyan-400">{rhymeAnalysis.stats.totalLines}</div>
+                                              <div className="text-xs text-gray-400">Řádků</div>
+                                          </div>
+                                          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
+                                              <div className="text-2xl font-bold text-green-400">{rhymeAnalysis.stats.rhymedLines}</div>
+                                              <div className="text-xs text-gray-400">Zrymováno</div>
+                                          </div>
+                                          <div className="bg-gray-700/50 rounded-lg p-3 text-center">
+                                              <div className="text-lg font-bold text-purple-400">{rhymeAnalysis.stats.rhymeScheme || 'N/A'}</div>
+                                              <div className="text-xs text-gray-400">Schéma</div>
+                                          </div>
+                                      </div>
+
+                                      {/* Meter */}
+                                      <div className="bg-gray-700/30 rounded-lg p-3">
+                                          <div className="flex items-center gap-2 mb-2">
+                                              <span className="text-sm font-bold text-yellow-400">Metrika:</span>
+                                              <span className="text-white">{rhymeAnalysis.meter.pattern || 'Neuvedeno'}</span>
+                                          </div>
+                                          {rhymeAnalysis.meter.syllables && rhymeAnalysis.meter.syllables.length > 0 && (
+                                              <div className="text-xs text-gray-400 mb-2">
+                                                  Slabiky: {rhymeAnalysis.meter.syllables.slice(0, 20).join(', ')}{rhymeAnalysis.meter.syllables.length > 20 ? '...' : ''}
+                                              </div>
+                                          )}
+                                          {rhymeAnalysis.meter.suggestions && rhymeAnalysis.meter.suggestions.length > 0 && (
+                                              <div className="mt-2">
+                                                  <span className="text-xs text-gray-500 block mb-1">Návrhy:</span>
+                                                  <ul className="text-sm text-gray-300 space-y-1">
+                                                      {rhymeAnalysis.meter.suggestions.map((suggestion, i) => (
+                                                          <li key={i} className="flex items-start gap-2">
+                                                              <span className="text-cyan-400">•</span>
+                                                              {suggestion}
+                                                          </li>
+                                                      ))}
+                                                  </ul>
+                                              </div>
+                                          )}
+                                      </div>
+
+                                      {/* Rhymes */}
+                                      {rhymeAnalysis.rhymes && rhymeAnalysis.rhymes.length > 0 && (
+                                          <div className="bg-gray-700/30 rounded-lg p-3">
+                                              <span className="text-sm font-bold text-pink-400 block mb-2">Rýmy:</span>
+                                              <div className="space-y-2 max-h-[150px] overflow-y-auto">
+                                                  {rhymeAnalysis.rhymes.slice(0, 10).map((rhyme, i) => (
+                                                      <div key={i} className="flex items-center gap-2 text-sm">
+                                                          <span className="text-white font-medium">řádek {rhyme.line}:</span>
+                                                          <span className="text-pink-300">{rhyme.word}</span>
+                                                          {rhyme.rhymeWith && rhyme.rhymeWith.length > 0 && (
+                                                              <span className="text-gray-400">
+                                                                  ↔ {rhyme.rhymeWith.map(r => `${r.word} (${r.type})`).join(', ')}
+                                                              </span>
+                                                          )}
+                                                      </div>
+                                                  ))}
+                                                  {rhymeAnalysis.rhymes.length > 10 && (
+                                                      <div className="text-xs text-gray-500">... a další ({rhymeAnalysis.rhymes.length - 10})</div>
+                                                  )}
+                                              </div>
+                                          </div>
+                                      )}
+                                  </div>
+                              ) : (
+                                  <div className="text-center py-4 text-gray-500">
+                                      Pro zobrazení analýzy klikněte na tlačítko "Analýza"
+                                  </div>
+                              )}
+                          </div>
+                      )}
+
+                      <div className="flex-1 overflow-hidden">
                         <div className={`h-full ${isGridMode ? 'grid grid-cols-2 grid-rows-2 border-b md:border-b-0 md:border-r border-gray-800' : 'flex flex-col md:flex-row border-b md:border-b-0 md:border-r border-gray-800'}`}>
                              {selectedSongwriterNotes.map((noteId, index) => {
                                  const note = notes.find(n => n.id === noteId);
                                  if (!note) return null;
                                  
-                                 return (
-                                     <div key={noteId} className={`flex flex-col border-gray-800 overflow-hidden relative ${songwriterColors[index]} ${isGridMode ? 'border-b border-r' : 'flex-1 border-r min-w-[300px]'}`}>
-                                         <div 
-                                             className="flex-1 overflow-y-auto p-4 custom-scrollbar relative group pb-10"
-                                             onScroll={handleSyncScroll}
-                                             ref={(el) => { scrollSyncRefs.current[noteId] = el; }}
-                                         >
+                                  return (
+                                      <div key={noteId} className={`flex flex-col border-gray-800 overflow-hidden relative ${songwriterColors[index]} ${isGridMode ? 'border-b border-r' : 'flex-1 border-r min-w-[300px]'}`}>
+                                          {/* Active Scroll Indicator */}
+                                          {activeScrollIndex === index && (
+                                              <div className="absolute top-0 left-0 right-0 h-0.5 bg-cyan-400 z-10 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></div>
+                                          )}
+                                          <div 
+                                              className="flex-1 overflow-y-auto p-4 custom-scrollbar relative group pb-10"
+                                              onScroll={(e) => handleSyncScroll(e, index)}
+                                              ref={(el) => { scrollSyncRefs.current[noteId] = el; }}
+                                          >
                                              {/* Floating Action Button for Selection */}
                                              <SongwriterSourceToolbar 
                                                 onAdd={() => {
@@ -1182,20 +1488,94 @@ export default function App() {
                         </div>
                      </div>
 
-                     {/* Composition Area */}
-                     <div className="h-1/3 bg-gray-900 border-t-2 border-purple-900/50 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.5)] z-20">
-                         <div className="bg-gray-800 px-4 py-1 flex items-center justify-between text-xs text-gray-400">
-                             <span className="font-bold text-purple-400">FINÁLNÍ KOMPOZICE</span>
-                             <span>Můžete volně upravovat</span>
-                         </div>
-                         <div 
-                            className="flex-1 p-4 overflow-y-auto focus:outline-none text-gray-200 font-mono text-sm leading-relaxed"
-                            contentEditable
-                            suppressContentEditableWarning
-                            dangerouslySetInnerHTML={{ __html: compositionContent }}
-                            onInput={(e) => setCompositionContent(e.currentTarget.innerHTML)}
-                         />
-                     </div>
+                      {/* Composition Area */}
+                      <div className="h-1/3 bg-gray-900 border-t-2 border-purple-900/50 flex flex-col shadow-[0_-5px_15px_rgba(0,0,0,0.5)] z-20">
+                          {/* Toolbar */}
+                          <div className="bg-gray-800 px-4 py-2 flex items-center justify-between text-xs text-gray-400 border-b border-gray-700">
+                              <div className="flex items-center gap-4">
+                                  <span className="font-bold text-purple-400">FINÁLNÍ KOMPOZICE</span>
+                                  
+                                  {/* Formatting Tools */}
+                                  <div className="flex items-center gap-1">
+                                      <span className="text-gray-500 mr-1">Nástroje:</span>
+                                      <button 
+                                          onClick={() => {
+                                              const marker = autoNumbering ? `[SLOKA ${((compositionContent.match(/\[SLOKA /g) || []).length) + 1}]` : '[SLOKA]';
+                                              setCompositionContent(prev => prev + '\n\n' + marker + '\n');
+                                          }}
+                                          className="px-2 py-1 bg-blue-600/50 hover:bg-blue-600 text-blue-200 rounded text-xs transition"
+                                          title="Přidat sloku"
+                                      >
+                                          Sloka
+                                      </button>
+                                      <button 
+                                          onClick={() => {
+                                              const marker = autoNumbering ? `[REFRÉN ${((compositionContent.match(/\[REFRÉN /g) || []).length) + 1}]` : '[REFRÉN]';
+                                              setCompositionContent(prev => prev + '\n\n' + marker + '\n');
+                                          }}
+                                          className="px-2 py-1 bg-pink-600/50 hover:bg-pink-600 text-pink-200 rounded text-xs transition"
+                                          title="Přidat refrén"
+                                      >
+                                          Refrén
+                                      </button>
+                                      <button 
+                                          onClick={() => {
+                                              const marker = '[MOST]';
+                                              setCompositionContent(prev => prev + '\n\n' + marker + '\n');
+                                          }}
+                                          className="px-2 py-1 bg-yellow-600/50 hover:bg-yellow-600 text-yellow-200 rounded text-xs transition"
+                                          title="Přidat most"
+                                      >
+                                          Most
+                                      </button>
+                                      <button 
+                                          onClick={() => {
+                                              setCompositionContent(prev => prev + '\n');
+                                          }}
+                                          className="px-2 py-1 bg-gray-600/50 hover:bg-gray-600 text-gray-200 rounded text-xs transition"
+                                          title="Nový řádek"
+                                      >
+                                          ↩
+                                      </button>
+                                  </div>
+                              </div>
+                              
+                              <div className="flex items-center gap-3">
+                                  {/* Auto-numbering toggle */}
+                                  <label className="flex items-center gap-1.5 cursor-pointer">
+                                      <input 
+                                          type="checkbox" 
+                                          checked={autoNumbering}
+                                          onChange={(e) => setAutoNumbering(e.target.checked)}
+                                          className="rounded bg-gray-700 border-gray-600 text-purple-500 focus:ring-purple-400"
+                                      />
+                                      <span>Automatické číslování</span>
+                                  </label>
+                                  
+                                  {/* Manual save button */}
+                                  <button 
+                                      onClick={saveCompositionToLocalStorage}
+                                      className="px-2 py-1 bg-purple-600/50 hover:bg-purple-600 text-purple-200 rounded text-xs transition flex items-center gap-1"
+                                      title="Uložit nyní"
+                                  >
+                                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                      </svg>
+                                      Uložit
+                                  </button>
+                              </div>
+                          </div>
+                          
+                          {/* Editor */}
+                          <div 
+                             className="flex-1 p-4 overflow-y-auto focus:outline-none text-gray-200 font-mono text-sm leading-relaxed whitespace-pre-wrap"
+                             contentEditable
+                             suppressContentEditableWarning
+                             onInput={(e) => setCompositionContent(e.currentTarget.textContent || '')}
+                          >
+                              {compositionContent}
+                          </div>
+                      </div>
                  </div>
              );
         }

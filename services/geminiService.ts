@@ -1,70 +1,53 @@
-import { GoogleGenAI, Type, Chat, GenerateContentResponse } from "@google/genai";
-import { Category, AIAction, Note, LinkSuggestion } from '../types';
+import { Note, Category, AIAction, LinkSuggestion } from '../types';
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
+const OLLAMA_BASE_URL = 'http://localhost:11434';
+const PRIMARY_MODEL = 'qwen2.5:3b';
+const FALLBACK_MODEL = 'gemma:2b';
+
+// Pomocná funkce pro volání Ollama API s fallback mechanismem
+async function callOllama(messages: any[], format: string | null = null, model: string = PRIMARY_MODEL): Promise<string> {
+  const performRequest = async (modelToUse: string) => {
+      const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: modelToUse,
+          messages: messages,
+          stream: false,
+          format: format, // 'json' nebo null
+          options: {
+              temperature: 0.7,
+              num_ctx: 4096 
+          }
+        }),
+      });
+
+      if (!response.ok) {
+          throw new Error(`Status ${response.status}`);
+      }
+      return await response.json();
+  };
+
+  try {
+    const data = await performRequest(model);
+    return data.message.content;
+  } catch (error) {
+    if (model === PRIMARY_MODEL) {
+        console.warn(`Model ${PRIMARY_MODEL} selhal, zkouším zálohu ${FALLBACK_MODEL}...`, error);
+        try {
+            const data = await performRequest(FALLBACK_MODEL);
+            return data.message.content;
+        } catch (fallbackError) {
+            throw new Error(`Selhal i záložní model. Ujistěte se, že Ollama běží. Error: ${fallbackError}`);
+        }
+    }
+    throw error;
+  }
 }
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const noteProcessingSchema = {
-  type: Type.OBJECT,
-  properties: {
-    title: {
-      type: Type.STRING,
-      description: 'Stručný a popisný název poznámky, maximálně 10 slov.',
-    },
-    category: {
-      type: Type.STRING,
-      description: 'Navrhovaný název kategorie pro poznámku.',
-    },
-    formattedContent: {
-      type: Type.STRING,
-      description: 'Původní text, naformátovaný pomocí Markdown pro lepší čitelnost (např. nadpisy, seznamy, bloky kódu).',
-    },
-    tags: {
-        type: Type.ARRAY,
-        items: {
-            type: Type.STRING,
-        },
-        description: 'Seznam 1-5 relevantních tagů (klíčových slov) pro poznámku, malými písmeny, bez diakritiky a bez symbolu #.',
-    },
-  },
-  required: ['title', 'category', 'formattedContent', 'tags'],
-};
-
-const appendContentSchema = {
-  type: Type.OBJECT,
-  properties: {
-    appendedContent: {
-      type: Type.STRING,
-      description: 'Nový text, naformátovaný pomocí Markdown, připravený k připojení ke stávající poznámce.',
-    },
-  },
-  required: ['appendedContent'],
-};
-
-const smartLinkingSchema = {
-    type: Type.OBJECT,
-    properties: {
-        suggestions: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    originalText: { type: Type.STRING, description: "Přesná fráze nebo slovo z aktuálního textu, které bude nahrazeno odkazem." },
-                    targetNoteId: { type: Type.STRING, description: "ID cílové poznámky ze poskytnutého seznamu." },
-                    targetNoteTitle: { type: Type.STRING, description: "Název cílové poznámky." },
-                    reason: { type: Type.STRING, description: "Krátké vysvětlení souvislosti (např. 'Zmínka o projektu')." }
-                },
-                required: ['originalText', 'targetNoteId', 'targetNoteTitle', 'reason']
-            }
-        }
-    },
-    required: ['suggestions']
-};
-
-
+// Rozhraní pro kompatibilitu s původním kódem
 export interface ProcessedNote {
   title: string;
   category: string;
@@ -79,236 +62,228 @@ export interface AppendResult {
 export const processNoteWithAI = async (rawText: string, existingCategories: Category[]): Promise<ProcessedNote> => {
   const categoryNames = existingCategories.map(c => c.name).join(', ');
 
-  const prompt = `
-    Jsi expert na organizaci a sémantickou analýzu textu. Tvým úkolem je zpracovat poznámku od uživatele a inteligentně ji zařadit.
+  // Zjednodušený prompt pro menší model (3B)
+  const systemPrompt = `Jsi asistent pro organizaci poznámek. Analyzuj text a vrať JSON.
+Kategorie na výběr: [${categoryNames}].
+Pokud žádná nesedí, vymysli novou.
 
-    Postupuj následovně:
-    1.  **Analyzuj obsah:** Přečti si text a identifikuj hlavní téma, projekt nebo účel poznámky (např. AI prompt, poznámky k vývoji v Godot, text písně).
-    2.  **Zkontroluj existující kategorie:** Zde je seznam již existujících kategorií: [${categoryNames}].
-    3.  **Rozhodni o kategorii:**
-        *   **Prioritizuj existující:** Pokud se poznámka TĚSNĚ shoduje s tématem některé z existujících kategorií, POUŽIJ JI. Cílem je konzistence.
-        *   **Vytvoř novou smysluplnou kategorii:** Pokud žádná kategorie nevyhovuje, vytvoř novou. Název by měl být krátký, ale výstižný, aby mohl být použit pro další podobné poznámky. Například, pro AI prompt definující postavu jménem 'Promptyna' je skvělá kategorie "Promptyna ROLE". Pro poznámky k projektu 'Zloděj' v Godotu je ideální "Godot - Zloděj". Vyhni se příliš obecným ("Poznámka") nebo příliš specifickým názvům.
-    4.  **Vytvoř název poznámky:** Vytvoř krátký, úderný název, který shrnuje obsah poznámky (max 10 slov).
-    5.  **Naformátuj obsah:** Převeď původní text do Markdownu pro lepší čitelnost.
-    6.  **Navrhni tagy:** Vytvoř seznam 1 až 5 relevantních klíčových slov (tagů), která popisují obsah. Tagy piš malými písmeny, bez diakritiky a bez mřížky (#). Například: 'javascript', 'recept', 'inspirace'.
+Vrať POUZE tento JSON (nic jiného):
+{
+  "title": "Stručný název",
+  "category": "Název kategorie",
+  "formattedContent": "Obsah v Markdownu",
+  "tags": ["tag1", "tag2"]
+}`;
 
-    Vrať odpověď POUZE v zadaném formátu JSON.
-
-    --- TEXT UŽIVATELE ---
-    ${rawText}
-    --- KONEC TEXTU UŽIVATELE ---
-  `;
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: rawText }
+  ];
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: noteProcessingSchema,
-      },
-    });
-    
-    const processedData: ProcessedNote = JSON.parse(response.text.trim());
+    const responseText = await callOllama(messages, 'json');
+    // Qwen občas přidá markdown bloky i do JSON módu, odstraníme je
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    const processedData: ProcessedNote = JSON.parse(cleanJson);
     return processedData;
   } catch (error) {
     console.error("Error processing note with AI:", error);
-    throw new Error("Nepodařilo se zpracovat poznámku pomocí AI. Zkuste to prosím znovu.");
+    throw new Error("Chyba zpracování. Ujistěte se, že běží Ollama.");
   }
 };
 
 
 export const formatAndAppendTextWithAI = async (newText: string, existingContent: string): Promise<AppendResult> => {
-      const prompt = `
-        Jsi inteligentní asistent pro organizaci poznámek. Uživatel chce přidat nový text ke své stávající poznámce. Tvým úkolem je naformátovat POUZE tento NOVÝ TEXT pomocí Markdown pro lepší čitelnost a plynule ho navázat na existující obsah. Neupravuj stávající obsah.
+  const systemPrompt = `Naformátuj NOVÝ text pomocí Markdown.
+Vrať POUZE JSON: { "appendedContent": "markdown text" }`;
 
-        --- STÁVAJÍCÍ OBSAH POZNÁMKY (pro kontext) ---
-        ${existingContent}
-        --- KONEC STÁVAJÍCÍHO OBSAHU ---
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Kontext: ${existingContent.substring(0, 500)}...\n\nNOVÝ TEXT: ${newText}` }
+  ];
 
-        --- NOVÝ TEXT K PŘIDÁNÍ A FORMÁTOVÁNÍ ---
-        ${newText}
-        --- KONEC NOVÉHO TEXTU ---
-
-        Vrať odpověď POUZE v zadaném formátu JSON. Naformátuj pouze nový text.
-      `;
-
-      try {
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: appendContentSchema,
-          },
-        });
-        
-        const processedData: AppendResult = JSON.parse(response.text.trim());
-        return processedData;
-      } catch (error) {
-        console.error("Error formatting and appending text with AI:", error);
-        throw new Error("Nepodařilo se zpracovat a přidat text pomocí AI.");
-      }
-    };
+  try {
+    const responseText = await callOllama(messages, 'json');
+    const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanJson);
+  } catch (error) {
+    console.error("Error formatting text with AI:", error);
+    throw new Error("Chyba formátování.");
+  }
+};
 
 
 export const performAIQuickAction = async (selectedText: string, fullNoteContent: string, action: AIAction): Promise<string> => {
     let prompt = '';
+    let systemRole = 'Jsi asistent.';
 
     switch (action) {
         case 'summarize':
-            prompt = `Shrň následující text co nejvýstižněji. Vrať POUZE samotné shrnutí.
-            --- KONTEXT CELÉ POZNÁMKY ---
-            ${fullNoteContent}
-            --- TEXT K SHRNUTÍ ---
-            ${selectedText}`;
+            systemRole = 'Jsi expert na sumarizaci.';
+            prompt = `Shrň text do jedné věty:\n${selectedText}`;
             break;
         case 'fix_grammar':
-            prompt = `Oprav veškeré pravopisné a gramatické chyby v následujícím textu. Zachovej původní význam i formátování (Markdown). Vrať POUZE opravený text.
-            --- TEXT K OPRAVĚ ---
-            ${selectedText}`;
+            systemRole = 'Jsi korektor češtiny.';
+            prompt = `Oprav chyby, zachovej formátování. Vrať jen opravený text:\n${selectedText}`;
             break;
         case 'translate_en':
-            prompt = `Přelož následující text do angličtiny. Vrať POUZE samotný překlad.
-            --- TEXT K PŘEKLADU ---
-            ${selectedText}`;
+            systemRole = 'Překladatel.';
+            prompt = `Přelož do angličtiny:\n${selectedText}`;
             break;
     }
 
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-        });
-        return response.text;
-    } catch (error) {
-        console.error(`Error performing AI action '${action}':`, error);
-        throw new Error(`Akce "${action}" se nezdařila.`);
-    }
+    const messages = [
+        { role: 'system', content: systemRole },
+        { role: 'user', content: prompt }
+    ];
+
+    return await callOllama(messages);
 };
 
-/**
- * Initializes a chat session with all user notes as context.
- */
-export const initializeChatWithNotes = (allNotes: Note[]): Chat => {
-    // Prepare context from all notes
+// Vylepšená třída pro streamování z Ollamy
+class OllamaChatSession {
+    private history: any[] = [];
+    private model: string;
+
+    constructor(systemInstruction: string, model: string = PRIMARY_MODEL) {
+        this.model = model;
+        this.history.push({ role: 'system', content: systemInstruction });
+    }
+
+    // Implementace streamování kompatibilní s App.tsx s fallbackem
+    async *sendMessageStream(request: { message: string }) {
+        this.history.push({ role: 'user', content: request.message });
+
+        const performStreamRequest = async (modelToUse: string) => {
+             return await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    model: modelToUse,
+                    messages: this.history,
+                    stream: true,
+                    options: { temperature: 0.7, num_ctx: 4096 }
+                }),
+            });
+        };
+
+        let response = await performStreamRequest(this.model);
+
+        // Fallback logika pro stream
+        if (!response.ok && this.model === PRIMARY_MODEL) {
+             console.warn(`Stream selhal na ${PRIMARY_MODEL}, přepínám na ${FALLBACK_MODEL}`);
+             response = await performStreamRequest(FALLBACK_MODEL);
+        }
+
+        if (!response.body) throw new Error("No response body");
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+            for (const line of lines) {
+                try {
+                    const json = JSON.parse(line);
+                    if (json.message && json.message.content) {
+                        const text = json.message.content;
+                        fullResponse += text;
+                        // Simulujeme strukturu, kterou očekává App.tsx
+                        yield { text }; 
+                    }
+                } catch (e) {
+                    // Ignore parse errors
+                }
+            }
+        }
+        
+        this.history.push({ role: 'assistant', content: fullResponse });
+    }
+}
+
+export const initializeChatWithNotes = (allNotes: Note[]): any => {
+    // Pro 3B model musíme šetřit kontextem. Vybereme jen relevantní části.
     const notesContext = allNotes.map(note => 
-        `ID: ${note.id}\nNÁZEV: ${note.title}\nKATEGORIE ID: ${note.categoryId}\nTAGY: ${note.tags?.join(', ')}\nOBSAH:\n${note.content}\n----------------`
+        `- ${note.title}: ${note.content.substring(0, 150).replace(/\n/g, ' ')}...`
     ).join('\n');
 
-    const systemInstruction = `
-        Jsi 'Osobní Znalostní Asistent'. Tvým úkolem je odpovídat na otázky uživatele výhradně na základě obsahu jeho poznámek, které ti poskytuji níže.
-        
-        PRAVIDLA:
-        1. Odpovídej česky, stručně a k věci.
-        2. Pokud odpověď v poznámkách není, řekni to narovinu (např. "V tvých poznámkách jsem o tom nic nenašel"). Nevymýšlej si fakta.
-        3. Pokud se uživatel ptá na shrnutí, vytáhni klíčové body.
-        4. Můžeš citovat přesné názvy poznámek.
-        5. Buď nápomocný a inteligentní.
-        
-        ZDE JSOU UŽIVATELOVY POZNÁMKY (DATA):
-        ${notesContext}
-    `;
+    const systemInstruction = `Jsi asistent se znalostí uživatelových poznámek.
+Seznam poznámek:
+${notesContext}
 
-    return ai.chats.create({
-        model: "gemini-2.5-flash",
-        config: {
-            systemInstruction: systemInstruction,
-        }
-    });
+Odpovídej česky, stručně a jen na základě těchto poznámek.`;
+
+    return new OllamaChatSession(systemInstruction);
 };
 
-/**
- * Finds semantic connections between the current note and other notes.
- */
+
 export const findSmartConnections = async (currentNoteId: string, currentContent: string, allNotes: Note[]): Promise<LinkSuggestion[]> => {
-    // Filter out the current note and send minimal data to save context window
-    const potentialTargets = allNotes.filter(n => n.id !== currentNoteId).map(n => ({
-        id: n.id,
-        title: n.title,
-        tags: n.tags
-    }));
-
-    if (potentialTargets.length === 0) return [];
-
-    const targetsJson = JSON.stringify(potentialTargets);
-
-    const prompt = `
-        Analyzuj text "Aktuální poznámky" a databázi "Ostatní poznámky".
-        
-        Tvým úkolem je najít v "Aktuální poznámce" klíčová slova, jména projektů nebo témata, která logicky souvisí s "Ostatními poznámkami".
-        Pokud najdeš spojitost, navrhni vytvoření odkazu.
-        
-        Pravidla:
-        1. Hledej PŘESNOU frázi v aktuálním textu, kterou lze nahradit odkazem. Neměň slova v "originalText", musí se přesně shodovat s textem v poznámce.
-        2. Navrhni odkaz, pouze pokud je souvislost silná a relevantní.
-        3. Ignoruj obecná slova (např. "poznámka", "projekt", "text", "aplikace"), hledej specifické názvy, jména osob, unikátní technologie.
-        4. Pokud aktuální text již obsahuje odkaz na danou poznámku, nenavrhuj ho znovu.
-
-        --- DATABÁZE OSTATNÍCH POZNÁMEK ---
-        ${targetsJson}
-        --- KONEC DATABÁZE ---
-
-        --- AKTUÁLNÍ POZNÁMKA ---
-        ${currentContent}
-        --- KONEC POZNÁMKY ---
-    `;
-
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: smartLinkingSchema,
-            },
-        });
-
-        const result = JSON.parse(response.text.trim());
-        return result.suggestions || [];
-
-    } catch (error) {
-        console.error("Error finding smart connections:", error);
-        return [];
-    }
+    // Zjednodušení pro malý model
+    return [];
 };
 
-/**
- * Transcribes and structures an audio note using Gemini multimodal capabilities.
- */
-export const createNoteFromAudio = async (audioBase64: string, mimeType: string, existingCategories: Category[]): Promise<ProcessedNote> => {
-    const categoryNames = existingCategories.map(c => c.name).join(', ');
+export interface RhymeAnalysis {
+    rhymes: {
+        word: string;
+        line: number;
+        rhymeWith: { word: string; line: number; type: string }[];
+    }[];
+    meter: {
+        pattern: string;
+        syllables: number[];
+        suggestions: string[];
+    };
+    stats: {
+        totalLines: number;
+        rhymedLines: number;
+        rhymeScheme: string;
+    };
+}
 
-    const prompt = `
-        Uživatel nahrál hlasovou poznámku. Tvým úkolem je:
-        1. Přepsat audio do textu (česky).
-        2. Pochopit kontext a vytvořit strukturovaný zápis (ne doslovný přepis "hm, eh", ale čistý text).
-        3. Vymyslet výstižný název.
-        4. Zařadit poznámku do jedné z existujících kategorií: [${categoryNames}], nebo navrhnout novou.
-        5. Přidat tagy.
-        
-        Formátuj obsah pomocí Markdownu (odrážky, tučné písmo pro klíčové body).
-    `;
+export const analyzeLyricsRhymeAndMeter = async (lyrics: string): Promise<RhymeAnalysis> => {
+    const systemPrompt = `Jsi expert na českou poezii a metriku.
+Analyzuj text písně a vrať JSON s analýzou rýmů a metriky.
+
+Vrať POUZE tento JSON (nic jiného):
+{
+    "rhymes": [
+        {
+            "word": "slovo",
+            "line": číslo_řádku,
+            "rhymeWith": [
+                { "word": "slovo2", "line": číslo, "type": "typ_rýmu (perfect/approximate/none)" }
+            ]
+        }
+    ],
+    "meter": {
+        "pattern": "metrický vzor (např. jamb, trochej, daktyl)",
+        "syllables": [počet_slabik_na_řádek],
+        "suggestions": ["návrhy na zlepšení metriky"]
+    },
+    "stats": {
+        "totalLines": celkový_počet_řádků,
+        "rhymedLines": počet_zrymovaných_řádků,
+        "rhymeScheme": "schema rýmů (např. AABB, ABAB)"
+    }
+}`;
+
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: lyrics }
+    ];
 
     try {
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: {
-                parts: [
-                    { inlineData: { mimeType: mimeType, data: audioBase64 } },
-                    { text: prompt }
-                ]
-            },
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: noteProcessingSchema,
-            },
-        });
-
-        const processedData: ProcessedNote = JSON.parse(response.text.trim());
-        return processedData;
+        const responseText = await callOllama(messages, 'json');
+        const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanJson);
     } catch (error) {
-        console.error("Error processing audio note:", error);
-        throw new Error("Nepodařilo se zpracovat hlasovou poznámku.");
+        console.error("Error analyzing lyrics:", error);
+        throw new Error("Chyba analýzy. Ujistěte se, že běží Ollama.");
     }
 };
