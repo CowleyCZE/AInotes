@@ -3,31 +3,26 @@ import { useAppLogic } from './hooks/useAppLogic';
 import { ChatView } from './components/ChatView';
 import { SongwriterStudio } from './components/SongwriterStudio';
 import { NoteView } from './components/NoteView';
-import { 
-    PlusIcon, MicIcon, StopIcon, ListIcon, GridIcon, ClockIcon, MusicIcon, 
-    EditIcon, TrashIcon, SaveIcon, XIcon, BrainIcon 
-} from './components/Icons';
-import { formatDate, groupNotesByTitle } from './services/utils';
+import { PlusIcon, MusicIcon, BrainIcon } from './components/Icons';
 
 export default function App() {
     const logic = useAppLogic();
     const { 
         notes, categories, selectedCategoryId, setSelectedCategoryId,
         selectedTag, setSelectedTag, selectedNoteId, handleSetSelectedNote, searchTerm, setSearchTerm,
-        isLoadingAI, isAppendingAI, error, isEditing, setIsEditing, editingContent, setEditingContent,
+        isLoadingAI, isEditing, setIsEditing, editingContent, setEditingContent,
         editingTitle, setEditingTitle, editingTags, setEditingTags, tagInput, setTagInput,
-        textToAppend, setTextToAppend, toast, isDataLoaded, saveStatus, viewMode, setViewMode,
-        activeSection, setActiveSection, editingCategoryId, setEditingCategoryId,
-        editingCategoryName, setEditingCategoryName, toolbarPosition,
-        activeAIAction, isAIActionLoading, isChatMode, setIsChatMode,
+        textToAppend, setTextToAppend, toast, isDataLoaded, saveStatus, 
+        activeSection, setActiveSection,
+        isChatMode, setIsChatMode,
         chatMessages, chatInput, setChatInput, isChatLoading,
-        isLinkingLoading, noteToDeleteId, setNoteToDeleteId,
+        noteToDeleteId, setNoteToDeleteId,
         isSongwriterMode, setIsSongwriterMode, selectedSongwriterNotes, setSelectedSongwriterNotes,
         compositionContent, setCompositionContent, sourceNoteContents,
         scrollSyncRefs, syncScrollEnabled, setSyncScrollEnabled, syncScrollMode, setSyncScrollMode,
         activeScrollIndex, showRhymeAnalyzer, setShowRhymeAnalyzer, rhymeAnalysis,
         isAnalyzingRhyme, autoNumbering, setAutoNumbering, showLyricModal, setShowLyricModal,
-        lyricForm, setLyricForm, expandedMusicFolders, setExpandedMusicFolders, selectedNote,
+        lyricForm, setLyricForm, selectedNote,
         handleAIProcess, handleSendChatMessage, handleSyncScroll, addTextToComposition, createNewNote
     } = logic;
 
@@ -121,33 +116,36 @@ export default function App() {
                         selectedSongwriterNotes={selectedSongwriterNotes} notes={notes}
                         syncScrollEnabled={syncScrollEnabled} setSyncScrollEnabled={setSyncScrollEnabled}
                         syncScrollMode={syncScrollMode} setSyncScrollMode={setSyncScrollMode}
-                        isAnalyzingRhyme={isAnalyzingRhyme} onAnalyzeRhyme={() => {}}
+                        isAnalyzingRhyme={isAnalyzingRhyme} onAnalyzeRhyme={handleAnalyzeRhyme}
                         onClose={() => setIsSongwriterMode(false)} showRhymeAnalyzer={showRhymeAnalyzer}
                         setShowRhymeAnalyzer={setShowRhymeAnalyzer} rhymeAnalysis={rhymeAnalysis}
                         activeScrollIndex={activeScrollIndex} handleSyncScroll={handleSyncScroll}
                         scrollSyncRefs={scrollSyncRefs} sourceNoteContents={sourceNoteContents}
                         addTextToComposition={addTextToComposition} autoNumbering={autoNumbering}
                         setAutoNumbering={setAutoNumbering} compositionContent={compositionContent}
-                        setCompositionContent={setCompositionContent} saveCompositionToLocalStorage={() => {}}
+                        setCompositionContent={setCompositionContent} 
+                        saveCompositionToLocalStorage={() => saveCompositionToLocalStorage(compositionContent)}
                     />
                 ) : selectedNote ? (
                     <NoteView 
                         selectedNote={selectedNote} isEditing={isEditing}
                         editingTitle={editingTitle} setEditingTitle={setEditingTitle}
                         editingContent={editingContent} setEditingContent={setEditingContent}
-                        editingTags={editingTags} removeEditingTag={() => {}}
-                        tagInput={tagInput} handleTagInputChange={() => {}} handleTagInputKeyDown={() => {}}
-                        setIsEditing={setIsEditing} handleCancelEditing={() => setIsEditing(false)}
-                        handleUndo={() => {}} handleFindConnections={() => {}}
-                        isLinkingLoading={false} setNoteToDeleteId={setNoteToDeleteId}
+                        editingTags={editingTags} removeEditingTag={removeEditingTag}
+                        tagInput={tagInput} handleTagInputChange={handleTagInputChange} handleTagInputKeyDown={handleTagInputKeyDown}
+                        setIsEditing={setIsEditing} handleCancelEditing={handleCancelEditing}
+                        handleUndo={handleUndo} handleFindConnections={handleFindConnections}
+                        isLinkingLoading={isLinkingLoading} setNoteToDeleteId={setNoteToDeleteId}
                         toggleChatMode={() => setIsChatMode(true)} saveStatus={saveStatus}
-                        error={error} contentAreaRef={null} handleMouseUp={() => {}}
-                        toolbarPosition={null} handleCopyText={() => {}}
-                        handleAIAction={() => {}} isAIActionLoading={false}
-                        activeAIAction={null} handleAIProcess={handleAIProcess}
+                        error={error}
+                        contentAreaRef={contentAreaRef} handleMouseUp={handleMouseUp}
+                        toolbarPosition={toolbarPosition} handleCopyText={handleCopyText}
+                        handleAIAction={handleAIAction} isAIActionLoading={isAIActionLoading}
+                        handleAIProcess={handleAIProcess}
                         isLoadingAI={isLoadingAI} textToAppend={textToAppend}
-                        setTextToAppend={setTextToAppend} handleAIAppend={() => {}}
-                        isAppendingAI={isAppendingAI} categories={categories}
+                        setTextToAppend={setTextToAppend} handleAIAppend={handleAIAppend}
+                        isAppendingAI={isAppendingAI}
+                        categories={categories}
                         onInternalLinkClick={handleSetSelectedNote}
                     />
                 ) : (

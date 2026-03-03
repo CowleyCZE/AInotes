@@ -1,4 +1,3 @@
-
 export interface Note {
   id: string;
   title: string;
@@ -30,9 +29,7 @@ export interface ChatMessage {
   isStreaming?: boolean;
 }
 
-export interface LinkSuggestion {
-  originalText: string;
-  targetNoteId: string;
-  targetNoteTitle: string;
-  reason: string; // Why AI thinks this is a connection
+export interface RhymeAnalysis {
+  rhymingWords: string[];
+  rhymeScheme: string;
 }

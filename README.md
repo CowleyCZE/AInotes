@@ -6,13 +6,13 @@ Aplikace je navržena pro tvůrce, vývojáře a spisovatele, kteří potřebuj�
 
 ## Hlavní vlastnosti
 
+*   **Lokální Úložiště:** Okamžitý start a offline režim díky `localStorage`, data jsou synchronizována s cloudem na pozadí.
 *   **AI Zpracování:** Automatické formátování do Markdownu, generování názvů, kategorizace a tagování.
-*   **Chytré Propojování:** AI analyzuje obsah a navrhuje relevantní odkazy mezi poznámkami.
-*   **Rychlé Akce:** Shrnutí textu, oprava gramatiky a překlad do angličtiny jedním kliknutím.
-*   **Chat s Poznámkami:** "RAG" (Retrieval-Augmented Generation) chat, který odpovídá na otázky na základě obsahu vašich poznámek.
-*   **Režim Skladatele:** Specializované rozhraní pro porovnávání verzí textů a skládání finální kompozice.
-*   **Hlasové Poznámky:** Nahrávání audia s následným přepisem a strukturováním pomocí AI.
-*   **Cloudová Synchronizace:** Data jsou ukládána v reálném čase do Firebase Firestore.
+*   **Chytré Propojování:** AI analyzuje obsah a automaticky vytváří interní linky mezi poznámkami.
+*   **Rychlé AI Akce:** Plovoucí toolbar pro shrnutí, opravu gramatiky a překlad.
+*   **Analýza Textu:** Pokročilá analýza rýmů a metriky pro autory písní.
+*   **Historie a Undo:** Systém uchovávající historii změn s možností návratu zpět.
+*   **Cloudová Synchronizace:** Bezpečná záloha v reálném čase do Firebase Firestore.
 
 ## Použité Technologie
 

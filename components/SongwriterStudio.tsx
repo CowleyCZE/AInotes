@@ -1,6 +1,6 @@
 import React from 'react';
 import { Note, RhymeAnalysis } from '../types';
-import { MusicIcon, XIcon, PlusIcon, ClockIcon } from './Icons';
+import { MusicIcon, XIcon, ClockIcon } from './Icons';
 import { SimpleMarkdownRenderer, SongwriterSourceToolbar } from './SimpleMarkdownRenderer';
 import { formatDate } from '../services/utils';
 
@@ -30,7 +30,6 @@ interface SongwriterStudioProps {
 }
 
 const songwriterColors = ['bg-purple-900/40 border-purple-500', 'bg-teal-900/40 border-teal-500', 'bg-green-900/40 border-green-500', 'bg-orange-900/40 border-orange-500'];
-const songwriterTextColors = ['text-purple-300', 'text-teal-300', 'text-green-300', 'text-orange-300'];
 
 export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
     selectedSongwriterNotes,
@@ -107,7 +106,7 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
                         className="text-sm bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white px-3 py-1.5 rounded transition flex items-center gap-1"
                     >
                         {isAnalyzingRhyme ? (
-                            <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"/>
+                            <div className="w-4 h-4 border-2 border-t-transparent border-white rounded-full animate-spin"></div>
                         ) : (
                             <>
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" /></svg>
@@ -141,7 +140,7 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
 
                     {isAnalyzingRhyme ? (
                         <div className="flex items-center justify-center py-8">
-                            <div className="w-8 h-8 border-4 border-t-purple-500 border-gray-600 rounded-full animate-spin mr-3"></div>
+                            <div className="w-8 h-8 border-4 border-t-purple-500 border-gray-600 rounded-full animate-spin"></div>
                             <span className="text-gray-400">Analyzuji text...</span>
                         </div>
                     ) : rhymeAnalysis ? (

@@ -1,4 +1,4 @@
-import { Note, Category, AIAction, LinkSuggestion } from '../types';
+import { Note, Category, AIAction } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
@@ -11,7 +11,7 @@ const client = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : nu
 const GEMINI_MODEL = "gemini-1.5-flash";
 
 // Helper for Ollama
-async function callOllama(messages: any[], format: string | null = null, model: string = PRIMARY_OLLAMA_MODEL): Promise<string> {
+async function callOllama(messages: object[], format: string | null = null, model: string = PRIMARY_OLLAMA_MODEL): Promise<string> {
   const performRequest = async (modelToUse: string) => {
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
         method: 'POST',
@@ -133,7 +133,7 @@ class AISession {
     private ollamaHistory: any[] = [];
     private systemInstruction: string;
 
-    constructor(systemInstruction: string, allNotes: Note[]) {
+    constructor(systemInstruction: string) {
         this.systemInstruction = systemInstruction;
         if (client) {
             this.chat = client.chats.create({
@@ -143,20 +143,20 @@ class AISession {
         }
         this.ollamaHistory.push({ role: 'system', content: systemInstruction });
     }
-
-    async *sendMessageStream(request: { message: string }) {
-        if (this.chat) {
-            try {
-                const responseStream = await this.chat.sendMessageStream(request.message);
-                for await (const chunk of responseStream) {
-                    yield { text: chunk.text };
-                }
-                return;
-            } catch (error) {
-                console.error("Gemini stream failed, falling back to Ollama:", error);
-                this.chat = null; 
+async *sendMessageStream(request: { message: string }) {
+    if (this.chat) {
+        try {
+            const responseStream = await this.chat.sendMessageStream(request.message);
+            for await (const chunk of responseStream) {
+                const text = chunk.text();
+                yield { text };
             }
+            return;
+        } catch (error) {
+            console.error("Gemini stream failed, falling back to Ollama:", error);
+            this.chat = null; 
         }
+    }
 
         // Ollama Fallback
         this.ollamaHistory.push({ role: 'user', content: request.message });
@@ -200,10 +200,10 @@ export const initializeChatWithNotes = (allNotes: Note[]): any => {
 ${notesContext}
 Odpovídej česky, buď nápomocný a věcný.`;
 
-    return new AISession(systemInstruction, allNotes);
+    return new AISession(systemInstruction);
 };
 
-export const findSmartConnections = async (currentNoteId: string, currentContent: string, allNotes: Note[]): Promise<LinkSuggestion[]> => {
+export const findSmartConnections = async (currentNoteId: string, currentContent: string, allNotes: Note[]): Promise<any[]> => {
     const otherNotes = allNotes.filter(n => n.id !== currentNoteId);
     if (otherNotes.length === 0) return [];
 

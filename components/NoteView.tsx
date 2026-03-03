@@ -1,5 +1,5 @@
 import React from 'react';
-import { Note, Category, AIAction, LinkSuggestion } from '../types';
+import { Note, Category, AIAction } from '../types';
 import { BrainIcon, UndoIcon, LinkIcon, SaveIcon, EditIcon, TrashIcon, CopyIcon, SummarizeIcon, GrammarIcon, TranslateIcon, SparklesIcon, XIcon } from './Icons';
 import { SimpleMarkdownRenderer } from './SimpleMarkdownRenderer';
 
@@ -24,13 +24,12 @@ interface NoteViewProps {
     toggleChatMode: () => void;
     saveStatus: string;
     error: string | null;
-    contentAreaRef: React.RefObject<HTMLDivElement | null>;
-    handleMouseUp: () => void;
+    contentAreaRef: React.RefObject<HTMLDivElement>;
+    handleMouseUp: (e: React.MouseEvent<HTMLDivElement>) => void;
     toolbarPosition: { top: number; left: number } | null;
     handleCopyText: () => void;
     handleAIAction: (action: AIAction) => void;
     isAIActionLoading: boolean;
-    activeAIAction: AIAction | null;
     handleAIProcess: () => void;
     isLoadingAI: boolean;
     textToAppend: string;
@@ -68,7 +67,6 @@ export const NoteView: React.FC<NoteViewProps> = ({
     handleCopyText,
     handleAIAction,
     isAIActionLoading,
-    activeAIAction,
     handleAIProcess,
     isLoadingAI,
     textToAppend,

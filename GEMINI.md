@@ -10,30 +10,27 @@ Tento projekt je moderní webová aplikace pro inteligentní správu poznámek a
     - **Backend/Databáze:** Firebase Firestore (synchronizace v reálném čase).
 
 ## Architektura a struktura kódu
-- `App.tsx`: Centrální komponenta spravující globální stav, UI režimy (Poznámky, Hudba, Chat, Skladatel) a hlavní interakční logiku.
-- `services/geminiService.ts`: Zapouzdření veškeré komunikace s Gemini API. Obsahuje funkce pro:
-    - `processNoteWithAI`: Automatické formátování a kategorizace.
-    - `initializeChatWithNotes`: RAG systém pro dotazování nad znalostní bází.
-    - `findSmartConnections`: Návrhy na propojování souvisejících poznámek.
-    - `createNoteFromAudio`: Přepis a strukturování hlasových poznámek.
-- `services/firebaseService.ts`: CRUD operace pro Firestore (`notes`, `categories`).
-- `types.ts`: Sdílené TypeScriptové interfacy (`Note`, `Category`, `ChatMessage`, atd.).
-- `firebaseConfig.ts`: Konfigurace spojení s Firebase.
+- `App.tsx`: Centrální komponenta spravující globální stav přes hook `useAppLogic`.
+- `hooks/useAppLogic.ts`: Jádro aplikace obsahující veškerou logiku:
+    - **Synchronizace dat:** Prioritní načítání z `localStorage`, následná synchronizace s Firestore.
+    - **AI Handlery:** `handleAIProcess`, `handleAIAction`, `handleAIAppend`, `handleAnalyzeRhyme`.
+    - **Stav editoru:** Správa titulu, obsahu, tagů a historie (Undo).
+    - **Songwriter Studio:** Logika pro synchronizované scrollování a kompozici.
+- `services/geminiService.ts`: Zapouzdření veškeré komunikace s AI.
+    - Obsahuje fallback na **Ollama** (lokální LLM).
+    - Funkce pro analýzu rýmů, sémantické propojování a streaming chatu.
 
 ## Klíčové funkce
-1. **AI Reorganizace:** Převádí syrový text na strukturovaný Markdown, navrhuje názvy, tagy a kategorie.
-2. **Režim Skladatele:** Unikátní rozhraní pro práci s verzemi textů písní. Umožňuje synchronizovaný posuv (scroll sync) více verzí a skládání finální kompozice pomocí drag-and-drop/výběru.
-3. **Kontextový Chat:** Uživatel může chatovat se svou "druhou pamětí" (všemi poznámkami v databázi).
-4. **Hlasové Poznámky:** Integrovaný přepis mluveného slova přímo do strukturované poznámky.
+1. **AI Reorganizace:** Inteligentní transformace textu na Markdown s kategorizací.
+2. **Režim Skladatele:** Synchronizace více verzí textu, analýza rýmů a metriky.
+3. **Kontextový Chat:** RAG systém nad poznámkami se streamovanými odpověďmi.
+4. **Smart Linking:** Automatické vytváření interních vazeb mezi poznámkami.
+5. **Robustní Ukládání:** Kombinace `localStorage` pro rychlost a Firestore pro cloudovou zálohu.
 
 ## Vývojové pokyny
-- **Spuštění:** `npm run dev`
-- **Build:** `npm run build`
-- **Konvence:**
-    - Používej striktní TypeScript.
-    - UI komponenty jsou v `App.tsx` (většinou inline SVG ikony a sub-komponenty).
-    - Pro AI funkce vždy využívej `geminiService.ts`.
-    - Data se ukládají automaticky (autosave) s debounce 1.5s v `App.tsx`.
+- **Data Persistence:** Všechny změny v `notes` a `categories` se automaticky ukládají (debounce 1.5s).
+- **AI Fallback:** Pokud selže Gemini API, systém se automaticky přepne na Ollama.
+- **Typová bezpečnost:** Vždy dodržuj interfacy definované v `types.ts`.
 
 ## Poznámky k implementaci AI
 - Aplikace očekává Gemini API klíč nastavený v prostředí.
