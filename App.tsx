@@ -33,7 +33,7 @@ export default function App() {
     }, [notes]);
 
     const filteredNotes = useMemo(() => {
-        const relevantNotes = activeSection === 'notes' ? notes.filter(n => n.type !== 'lyric') : notes.filter(n => n.type === 'lyric');
+        const relevantNotes = activeSection === 'notes' ? notes.filter(n => n.type !== 'music') : notes.filter(n => n.type === 'music');
         let filtered = [...relevantNotes].sort((a, b) => b.updatedAt - a.updatedAt);
         if (searchTerm) {
             filtered = filtered.filter(note => note.title.toLowerCase().includes(searchTerm.toLowerCase()) || note.content.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -46,61 +46,114 @@ export default function App() {
 
     if (!isDataLoaded) {
         return (
-            <div className="flex h-screen items-center justify-center bg-gray-900 text-gray-500">
-                <div className="w-16 h-16 border-4 border-t-cyan-400 border-gray-600 rounded-full animate-spin"></div>
+            <div className="flex h-screen items-center justify-center bg-gray-950 text-gray-500">
+                <div className="w-16 h-16 border-4 border-t-purple-500 border-gray-800 rounded-full animate-spin"></div>
             </div>
         );
     }
 
     return (
-        <div className="flex h-screen font-sans bg-gray-900 text-gray-200 overflow-hidden">
+        <div className="flex h-screen font-sans bg-gray-950 text-gray-200 overflow-hidden">
             {/* Sidebar */}
-            <aside className="w-64 bg-gray-800/50 flex flex-col p-4 border-r border-gray-700 hidden md:flex">
-                <h1 className="text-2xl font-bold text-cyan-400 mb-6">Chytrý Zápisník</h1>
-                <div className="flex mb-6 bg-gray-800 p-1 rounded-lg border border-gray-600">
-                    <button onClick={() => setActiveSection('notes')} className={`flex-1 py-1.5 rounded-md text-sm font-bold ${activeSection === 'notes' ? 'bg-gray-600 text-white' : 'text-gray-400'}`}>Poznámky</button>
-                    <button onClick={() => setActiveSection('music')} className={`flex-1 py-1.5 rounded-md text-sm font-bold ${activeSection === 'music' ? 'bg-purple-600 text-white' : 'text-gray-400'}`}>Hudba</button>
+            <aside className="w-64 bg-gray-900/80 flex flex-col p-4 border-r border-gray-800 hidden md:flex">
+                <div className="flex items-center gap-2 mb-8">
+                    <div className="bg-gradient-to-br from-purple-500 to-blue-600 p-2 rounded-lg">
+                        <MusicIcon className="h-6 w-6 text-white" />
+                    </div>
+                    <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">Studio Notes</h1>
+                </div>
+
+                <div className="flex mb-6 bg-gray-800/50 p-1 rounded-xl border border-gray-700">
+                    <button 
+                        onClick={() => setActiveSection('notes')} 
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeSection === 'notes' ? 'bg-gray-700 text-cyan-400 shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        Poznámky
+                    </button>
+                    <button 
+                        onClick={() => setActiveSection('music')} 
+                        className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${activeSection === 'music' ? 'bg-purple-600/20 text-purple-400 shadow-lg' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        Studio
+                    </button>
                 </div>
 
                 {activeSection === 'notes' ? (
                     <>
-                        <button onClick={createNewNote} className="flex items-center justify-center w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-2 rounded-lg mb-4"><PlusIcon className="h-5 w-5 mr-2" /> Nová Poznámka</button>
-                        <nav className="flex-grow overflow-y-auto">
-                            <div onClick={() => setSelectedCategoryId('all')} className={`py-2 px-3 rounded-md cursor-pointer ${selectedCategoryId === 'all' ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-300'}`}>Všechny</div>
+                        <button onClick={createNewNote} className="flex items-center justify-center w-full bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-500/30 font-bold py-2.5 rounded-xl mb-6 transition-all">
+                            <PlusIcon className="h-5 w-5 mr-2" /> Nová Poznámka
+                        </button>
+                        <nav className="flex-grow overflow-y-auto space-y-1">
+                            <div onClick={() => setSelectedCategoryId('all')} className={`py-2 px-3 rounded-lg cursor-pointer transition-colors ${selectedCategoryId === 'all' ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20' : 'text-gray-400 hover:bg-gray-800'}`}>Všechny</div>
                             {categories.map(cat => (
-                                <div key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`py-2 px-3 rounded-md cursor-pointer mt-1 ${selectedCategoryId === cat.id ? 'bg-cyan-500/20 text-cyan-300' : 'text-gray-300'}`}>{cat.name}</div>
+                                <div key={cat.id} onClick={() => setSelectedCategoryId(cat.id)} className={`py-2 px-3 rounded-lg cursor-pointer transition-colors ${selectedCategoryId === cat.id ? 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20' : 'text-gray-400 hover:bg-gray-800'}`}>{cat.name}</div>
                             ))}
-                            <div className="mt-6 flex flex-wrap gap-2">
-                                {allTags.map(tag => (
-                                    <button key={tag} onClick={() => setSelectedTag(tag)} className={`px-2 py-1 text-xs rounded-full ${selectedTag === tag ? 'bg-cyan-500 text-white' : 'bg-gray-700 text-gray-300'}`}>{tag}</button>
-                                ))}
-                            </div>
                         </nav>
+                        <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-gray-800">
+                            {allTags.map(tag => (
+                                <button key={tag} onClick={() => setSelectedTag(tag === selectedTag ? null : tag)} className={`px-2.5 py-1 text-xs rounded-full border transition-all ${selectedTag === tag ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'}`}>#{tag}</button>
+                            ))}
+                        </div>
                     </>
                 ) : (
-                    <div className="text-center py-10">
-                        <MusicIcon className="w-12 h-12 mx-auto text-purple-400 mb-3" />
-                        <button onClick={() => setShowLyricModal(true)} className="bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 px-4 rounded-lg w-full">Přidat text</button>
+                    <div className="space-y-4">
+                        <button onClick={createNewNote} className="flex items-center justify-center w-full bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 font-bold py-2.5 rounded-xl transition-all">
+                            <PlusIcon className="h-5 w-5 mr-2" /> Nový Song
+                        </button>
+                        <div className="p-4 bg-purple-500/5 rounded-xl border border-purple-500/10 text-center">
+                            <BrainIcon className="w-10 h-10 mx-auto text-purple-400/50 mb-2" />
+                            <p className="text-xs text-gray-500">AI asistent je připraven analyzovat vaši tvorbu.</p>
+                        </div>
                     </div>
                 )}
             </aside>
 
             {/* Note List */}
-            {activeSection === 'notes' && (
-                <section className={`w-96 bg-gray-800 flex flex-col border-r border-gray-700 ${isChatMode || (selectedNoteId && window.innerWidth < 768) ? 'hidden md:flex' : 'flex'}`}>
-                    <div className="p-4 border-b border-gray-700">
-                        <input type="text" placeholder="Hledat..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm" />
+            <section className={`w-80 bg-gray-900/50 flex flex-col border-r border-gray-800 transition-all ${isChatMode || (selectedNoteId && window.innerWidth < 768) ? 'hidden md:flex' : 'flex'}`}>
+                <div className="p-4 border-b border-gray-800 bg-gray-900/30">
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            placeholder="Hledat v archivech..." 
+                            value={searchTerm} 
+                            onChange={e => setSearchTerm(e.target.value)} 
+                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-purple-500/50 outline-none transition-all pl-10" 
+                        />
+                        <div className="absolute left-3 top-3 text-gray-500">
+                            <BrainIcon className="h-4 w-4" />
+                        </div>
                     </div>
-                    <div className="flex-grow overflow-y-auto">
-                        {filteredNotes.map(note => (
-                            <div key={note.id} onClick={() => handleSetSelectedNote(note.id)} className={`p-4 border-b border-gray-700 cursor-pointer ${selectedNoteId === note.id ? 'bg-cyan-500/10 border-l-4 border-l-cyan-500' : ''}`}>
-                                <h3 className="font-bold text-gray-100 truncate">{note.title}</h3>
-                                <p className="text-sm text-gray-400 truncate mt-1">{note.content.substring(0, 100)}</p>
+                </div>
+                <div className="flex-grow overflow-y-auto custom-scrollbar">
+                    {filteredNotes.length > 0 ? filteredNotes.map(note => (
+                        <div 
+                            key={note.id} 
+                            onClick={() => handleSetSelectedNote(note.id)} 
+                            className={`p-4 border-b border-gray-800/50 cursor-pointer transition-all hover:bg-gray-800/30 ${selectedNoteId === note.id ? 'bg-gradient-to-r from-purple-500/10 to-transparent border-l-4 border-l-purple-500' : ''}`}
+                        >
+                            <div className="flex justify-between items-start mb-1">
+                                <h3 className={`font-bold truncate ${selectedNoteId === note.id ? 'text-white' : 'text-gray-300'}`}>{note.title || 'Bez názvu'}</h3>
+                                {note.type === 'music' && <MusicIcon className="h-3 w-3 text-purple-400 flex-shrink-0 ml-2" />}
                             </div>
-                        ))}
-                    </div>
-                </section>
-            )}
+                            <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">
+                                {note.content.replace(/[#*`]/g, '').substring(0, 80)}
+                            </p>
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-[10px] text-gray-600 bg-gray-800 px-1.5 py-0.5 rounded">
+                                    {new Date(note.updatedAt).toLocaleDateString()}
+                                </span>
+                                {note.tags?.slice(0, 2).map(t => (
+                                    <span key={t} className="text-[10px] text-purple-400/70">#{t}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )) : (
+                        <div className="flex flex-col items-center justify-center h-40 text-gray-600 px-6 text-center">
+                            <p className="text-sm">Žádné záznamy v této sekci.</p>
+                        </div>
+                    )}
+                </div>
+            </section>
 
             {/* Main Content */}
             <main className="flex-1 flex flex-col bg-gray-900">

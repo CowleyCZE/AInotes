@@ -1,37 +1,43 @@
-# Chytrý Zápisník AI - Kontext pro Gemini
+# Studio Notes - AI-Powered Note-Taking & Music Production Suite
 
-Tento projekt je moderní webová aplikace pro inteligentní správu poznámek a tvorbu textů, postavená na technologiích React, Firebase a Google Gemini AI.
+Studio Notes is a hybrid application that combines advanced AI note-taking with a specialized music production studio. It allows users to manage general notes while providing deep analysis and architectural tools for songwriters and music producers.
 
-## Přehled projektu
-- **Hlavní účel:** Automatizace organizace poznámek, jejich formátování pomocí AI a pokročilá podpora pro autory textů (skladatele).
-- **Klíčové technologie:**
-    - **Frontend:** React 19, TypeScript, Vite, Tailwind CSS.
-    - **AI:** Google Gemini API (model `@google/genai`) - využívá se pro RAG (Retrieval-Augmented Generation), formátování, kategorizaci a extrakci metadat.
-    - **Backend/Databáze:** Firebase Firestore (synchronizace v reálném čase).
+## 🚀 Key Features
 
-## Architektura a struktura kódu
-- `App.tsx`: Centrální komponenta spravující globální stav přes hook `useAppLogic`.
-- `hooks/useAppLogic.ts`: Jádro aplikace obsahující veškerou logiku:
-    - **Synchronizace dat:** Prioritní načítání z `localStorage`, následná synchronizace s Firestore.
-    - **AI Handlery:** `handleAIProcess`, `handleAIAction`, `handleAIAppend`, `handleAnalyzeRhyme`.
-    - **Stav editoru:** Správa titulu, obsahu, tagů a historie (Undo).
-    - **Songwriter Studio:** Logika pro synchronizované scrollování a kompozici.
-- `services/geminiService.ts`: Zapouzdření veškeré komunikace s AI.
-    - Obsahuje fallback na **Ollama** (lokální LLM).
-    - Funkce pro analýzu rýmů, sémantické propojování a streaming chatu.
+### 📝 Smart Note-Taking (Legacy AInotes)
+- **AI Organization:** Automatically categorizes, titles, and tags notes using Gemini/Ollama.
+- **Contextual Chat:** RAG (Retrieval-Augmented Generation) system to chat with your entire note library.
+- **Smart Linking:** Automatically discovers and creates semantic connections between notes using `[[note-id|Title]]` syntax.
+- **Quick AI Actions:** Summarize, fix grammar, and translate selected text instantly.
 
-## Klíčové funkce
-1. **AI Reorganizace:** Inteligentní transformace textu na Markdown s kategorizací.
-2. **Režim Skladatele:** Synchronizace více verzí textu, analýza rýmů a metriky.
-3. **Kontextový Chat:** RAG systém nad poznámkami se streamovanými odpověďmi.
-4. **Smart Linking:** Automatické vytváření interních vazeb mezi poznámkami.
-5. **Robustní Ukládání:** Kombinace `localStorage` pro rychlost a Firestore pro cloudovou zálohu.
+### 🎵 Songwriter Studio (Legacy Producer-ai)
+- **Deep Lyric Scan:** Analyzes rhythm (prosody), detects weak rhymes, and suggests flow improvements.
+- **Rhyme & Meter Analysis:** Specialized tools for Czech poetry and lyrics.
+- **Meta Tags Editor:** Prepare lyrics for AI music generators (Suno, Udio) with structured tags like `[Verse]`, `[Chorus]`.
+- **Sync Scroll & Composition:** Multi-view editor for combining fragments from different notes into a final song.
 
-## Vývojové pokyny
-- **Data Persistence:** Všechny změny v `notes` a `categories` se automaticky ukládají (debounce 1.5s).
-- **AI Fallback:** Pokud selže Gemini API, systém se automaticky přepne na Ollama.
-- **Typová bezpečnost:** Vždy dodržuj interfacy definované v `types.ts`.
+## 🛠️ Technology Stack
+- **Frontend:** React 19, TypeScript, Vite, Tailwind CSS v4.
+- **AI Engine:** Dual-mode Google Gemini API (Flash 1.5) and local Ollama (Qwen 2.5 series).
+- **Backend:** Firebase Firestore (real-time sync) with LocalStorage fallback.
 
-## Poznámky k implementaci AI
-- Aplikace očekává Gemini API klíč nastavený v prostředí.
-- Promptování v `geminiService.ts` je optimalizováno pro češtinu a Markdown formátování.
+## 📂 Project Structure
+- `App.tsx`: Main entry point with section switching (Notes vs. Music).
+- `hooks/useAppLogic.ts`: Centralized state management and AI integration.
+- `services/geminiService.ts`: Unified AI service for both general and musical tasks.
+- `components/`:
+    - `NoteView.tsx`: Standard Markdown editor with AI toolbar.
+    - `SongwriterStudio.tsx`: Advanced multi-pane editor for music projects.
+    - `ChatView.tsx`: Streaming chat interface for interacting with notes.
+
+## 🔧 Building and Running
+- `npm install`: Install dependencies.
+- `npm run dev`: Start Vite development server.
+- `npm run build`: Build for production.
+- `npm test`: Run tests (Vitest).
+
+## 🧬 Development Conventions
+- **Types:** Always use definitions from `src/types.ts`.
+- **AI Models:** Use `PRIMARY_OLLAMA_MODEL` (1.5b) for logic/JSON and `CREATIVE_OLLAMA_MODEL` (3b) for text/creative tasks.
+- **Styling:** Tailwind CSS utility classes. Prefer dark mode aesthetics.
+- **Persistence:** Ensure all note changes are debounced and synced to both LocalStorage and Firestore.

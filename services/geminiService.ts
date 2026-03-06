@@ -1,8 +1,9 @@
-import { Note, Category, AIAction } from '../types';
+import { Note, Category, AIAction, RhymeAnalysis, AnalysisResult, AiMode } from '../src/types';
 import { GoogleGenAI } from "@google/genai";
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-const PRIMARY_OLLAMA_MODEL = 'qwen2.5-coder:1.5b';
+const PRIMARY_OLLAMA_MODEL = 'qwen2.5-coder:1.5b'; // Pro JSON a logiku (rychlý)
+const CREATIVE_OLLAMA_MODEL = 'qwen2.5:3b';       // Pro text, chat a rýmy (chytrý)
 const FALLBACK_OLLAMA_MODEL = 'qwen2.5:3b';
 
 // Gemini configuration
@@ -33,8 +34,8 @@ async function callOllama(messages: object[], format: string | null = null, mode
   try {
     return await performRequest(model);
   } catch (error) {
-    if (model === PRIMARY_OLLAMA_MODEL) {
-        console.warn(`Model ${PRIMARY_OLLAMA_MODEL} failed, trying fallback ${FALLBACK_OLLAMA_MODEL}...`);
+    if (model !== FALLBACK_OLLAMA_MODEL) {
+        console.warn(`Model ${model} failed, trying fallback ${FALLBACK_OLLAMA_MODEL}...`);
         return await performRequest(FALLBACK_OLLAMA_MODEL);
     }
     throw error;
@@ -42,7 +43,7 @@ async function callOllama(messages: object[], format: string | null = null, mode
 }
 
 // Main AI call with fallback logic
-async function callAI(systemPrompt: string, userPrompt: string, isJson: boolean = false): Promise<string> {
+async function callAI(systemPrompt: string, userPrompt: string, isJson: boolean = false, model: string = PRIMARY_OLLAMA_MODEL): Promise<string> {
     if (client) {
         try {
             const response = await client.models.generateContent({
@@ -65,7 +66,7 @@ async function callAI(systemPrompt: string, userPrompt: string, isJson: boolean 
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
     ];
-    const response = await callOllama(messages, isJson ? 'json' : null);
+    const response = await callOllama(messages, isJson ? 'json' : null, model);
     return isJson ? response.replace(/```json/g, '').replace(/```/g, '').trim() : response;
 }
 
@@ -74,6 +75,7 @@ export interface ProcessedNote {
   category: string;
   formattedContent: string;
   tags: string[];
+  type: 'general' | 'music';
 }
 
 export interface AppendResult {
@@ -83,16 +85,18 @@ export interface AppendResult {
 export const processNoteWithAI = async (rawText: string, existingCategories: Category[]): Promise<ProcessedNote> => {
   const categoryNames = existingCategories.map(c => c.name).join(', ');
   const systemPrompt = `Jsi asistent pro organizaci poznámek. Analyzuj text a vrať JSON.
+Urči, zda jde o běžnou poznámku ("general") nebo hudební text/nápad ("music").
 Kategorie na výběr: [${categoryNames}]. Pokud žádná nesedí, vymysli novou.
 Vrať POUZE tento JSON:
 {
   "title": "Stručný název",
   "category": "Název kategorie",
   "formattedContent": "Obsah v Markdownu",
-  "tags": ["tag1", "tag2"]
+  "tags": ["tag1", "tag2"],
+  "type": "general" | "music"
 }`;
 
-  const response = await callAI(systemPrompt, rawText, true);
+  const response = await callAI(systemPrompt, rawText, true, PRIMARY_OLLAMA_MODEL);
   return JSON.parse(response);
 };
 
@@ -101,7 +105,7 @@ export const formatAndAppendTextWithAI = async (newText: string, existingContent
 Vrať POUZE JSON: { "appendedContent": "markdown text" }`;
   const userPrompt = `EXISTUJÍCÍ OBSAH (prvních 500 znaků): ${existingContent.substring(0, 500)}...\n\nNOVÝ TEXT K PŘIDÁNÍ: ${newText}`;
 
-  const response = await callAI(systemPrompt, userPrompt, true);
+  const response = await callAI(systemPrompt, userPrompt, true, PRIMARY_OLLAMA_MODEL);
   return JSON.parse(response);
 };
 
@@ -124,8 +128,20 @@ export const performAIQuickAction = async (selectedText: string, fullNoteContent
             break;
     }
 
-    return await callAI(systemRole, prompt);
+    // Quick Actions use Creative Model for better language flow
+    return await callAI(systemRole, prompt, false, CREATIVE_OLLAMA_MODEL);
 };
+
+export const deepLyricScan = async (lyrics: string, mode: AiMode = AiMode.AUTO): Promise<AnalysisResult> => {
+    const systemPrompt = `Jsi "Lyric Architect". Analyzuj text a rozděl ho na segmenty.
+Detekuj rytmické chyby, slabé rýmy a navrhni 3 varianty pro každý segment.
+Vrať POUZE JSON typu AnalysisResult.
+Struktura: { segments: [{ id, originalText, isProblematic, issueDescription, variants: [{id, text, type}], selectedVariantId: null, smartSuggestions: [{id, type, text, description, confidence}] }], mode: "${mode}" }`;
+    
+    const response = await callAI(systemPrompt, lyrics, true, CREATIVE_OLLAMA_MODEL);
+    return JSON.parse(response);
+};
+
 
 // Streaming Chat Session
 class AISession {
@@ -164,7 +180,7 @@ async *sendMessageStream(request: { message: string }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: PRIMARY_OLLAMA_MODEL,
+                model: CREATIVE_OLLAMA_MODEL,
                 messages: this.ollamaHistory,
                 stream: true,
                 options: { temperature: 0.7, num_ctx: 4096 }
@@ -216,7 +232,7 @@ Vrať POUZE JSON pole. Pokud nic nenajdeš, vrať [].`;
     const userPrompt = `AKTUÁLNÍ POZNÁMKA:\n${currentContent}\n\nDOSTUPNÉ POZNÁMKY K PROPOJENÍ:\n${notesSummary}`;
 
     try {
-        const response = await callAI(systemPrompt, userPrompt, true);
+        const response = await callAI(systemPrompt, userPrompt, true, PRIMARY_OLLAMA_MODEL);
         return JSON.parse(response);
     } catch (e) {
         return [];
@@ -257,6 +273,6 @@ export const analyzeLyricsRhymeAndMeter = async (lyrics: string): Promise<RhymeA
     const systemPrompt = `Jsi expert na českou poezii. Analyzuj text a vrať JSON s analýzou rýmů a metriky.
 Struktura: { rhymes: [{word, line, rhymeWith: [{word, line, type}]}], meter: {pattern, syllables: [], suggestions: []}, stats: {totalLines, rhymedLines, rhymeScheme} }`;
     
-    const response = await callAI(systemPrompt, lyrics, true);
+    const response = await callAI(systemPrompt, lyrics, true, CREATIVE_OLLAMA_MODEL);
     return JSON.parse(response);
 };
