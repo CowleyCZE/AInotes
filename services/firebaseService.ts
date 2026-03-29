@@ -1,7 +1,17 @@
 
-import { collection, doc, writeBatch, getDocs, deleteDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, deleteDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebaseConfig';
 import { Note, Category } from '../types';
+
+export const saveNoteToFirestore = async (note: Note): Promise<void> => {
+    const noteDocRef = doc(db, 'public', 'shared', 'notes', note.id);
+    await setDoc(noteDocRef, note);
+};
+
+export const saveCategoryToFirestore = async (category: Category): Promise<void> => {
+    const categoryDocRef = doc(db, 'public', 'shared', 'categories', category.id);
+    await setDoc(categoryDocRef, category);
+};
 
 export const saveDataToFirestore = async (notes: Note[], categories: Category[]): Promise<void> => {
     const batch = writeBatch(db);

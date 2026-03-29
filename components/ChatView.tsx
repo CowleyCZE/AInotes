@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { ChatMessage } from '../src/types';
+import { ChatMessage } from '../types';
 import { XIcon, BrainIcon, SendIcon, UserIcon, SparklesIcon } from './Icons';
 import { SimpleMarkdownRenderer } from './SimpleMarkdownRenderer';
 

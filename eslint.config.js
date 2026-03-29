@@ -4,7 +4,12 @@ import pluginReact from "eslint-plugin-react";
 
 export default [
   {
-    ignores: ["dist/**"], // Přidáno pro ignorování složky dist
+    ignores: ["dist/**"], // Ignorování složky dist
+  },
+  ...tseslint.configs.recommended,
+  pluginReact.configs.flat.recommended,
+  {
+    files: ["**/*.{ts,tsx}"],
     languageOptions: { 
         globals: globals.browser,
         parserOptions: {
@@ -17,7 +22,7 @@ export default [
     },
     settings: {
         react: {
-          version: 'detect', // Explicitně nastavená verze Reactu
+          version: 'detect',
         },
     },
     plugins: {
@@ -27,12 +32,10 @@ export default [
     rules: {
         "react/react-in-jsx-scope": "off",
         "react/prop-types": "off",
-        "react/no-unescaped-entities": "off", // Vypnuto kvůli chybám v generovaném kódu
+        "react/no-unescaped-entities": "off",
         "@typescript-eslint/no-explicit-any": "off",
         "@typescript-eslint/no-non-null-assertion": "off",
-        "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }], // Změněno na varování a ignorování proměnných začínajících podtržítkem
+        "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     }
-  },
-  ...tseslint.configs.recommended,
-  pluginReact.configs.flat.recommended,
+  }
 ];

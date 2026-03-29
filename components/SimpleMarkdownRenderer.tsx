@@ -1,4 +1,7 @@
-import React, { useMemo, useEffect, useRef, useState, useCallback } from 'react';
+import React, { useMemo, useEffect, useState, useCallback } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import rehypeRaw from 'rehype-raw';
 import { PlusIcon } from './Icons';
 
 // --- MARKDOWN RENDERER ---
@@ -8,70 +11,61 @@ interface SimpleMarkdownRendererProps {
 }
 
 export const SimpleMarkdownRenderer: React.FC<SimpleMarkdownRendererProps> = ({ content, onLinkClick }) => {
-    const containerRef = useRef<HTMLDivElement>(null);
-
-    const htmlContent = useMemo(() => {
+    
+    // Pre-processing for [[id|Title]] syntax
+    const processedContent = useMemo(() => {
         if (!content) return '';
-        let processedContent = content;
-        
-        // 1. Protect Code Blocks
-        const codeBlocks: string[] = [];
-        processedContent = processedContent.replace(/```([\s\S]*?)```/g, (match, p1) => {
-            const code = p1.replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            codeBlocks.push(`<pre class="bg-gray-800 p-4 rounded-md my-4 overflow-x-auto"><code class="text-sm text-cyan-300">${code}</code></pre>`);
-            return `___CODEBLOCK_${codeBlocks.length - 1}___`;
-        });
-
-        // 2. Process standard Markdown
-        processedContent = processedContent
-            .replace(/^### (.*$)/gim, '<h3 class="text-xl font-semibold mt-4 mb-2">$1</h3>')
-            .replace(/^## (.*$)/gim, '<h2 class="text-2xl font-bold mt-6 mb-3 border-b border-gray-600 pb-2">$1</h2>')
-            .replace(/^# (.*$)/gim, '<h1 class="text-3xl font-bold mt-8 mb-4 border-b-2 border-gray-500 pb-2">$1</h1>')
-            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.*?)\*/g, '<em>$1</em>')
-            .replace(/`(.*?)`/g, '<code class="bg-gray-700 text-red-300 px-1 py-0.5 rounded-sm">$1</code>')
-            .replace(/^\s*[-*] (.*$)/gim, '<li>$1</li>')
-            .replace(/(\<li\>[\s\S]*?\<\/li\>)/g, '<ul>$1</ul>')
-            .replace(/\<\/ul\>\s*\<ul\>/g, '')
-            .replace(/\n/g, '<br />')
-            .replace(/(\<br \/\>){2,}/g, '<br />')
-            .replace(/\<ul\>\<br \/\>/g, '<ul>')
-            .replace(/\<\/li\>\<br \/\>/g, '</li>');
-        
-        // 3. Process Links: [Title](#note-id) or [Title](note-id)
-        processedContent = processedContent.replace(/\[(.*?)\]\(#(.*?)\)/g, '<a href="#$2" class="internal-link text-cyan-400 hover:underline cursor-pointer" data-note-id="$2">$1</a>');
-        
-        // 4. Restore Code Blocks
-        codeBlocks.forEach((block, index) => {
-            processedContent = processedContent.replace(`___CODEBLOCK_${index}___`, block);
-        });
-
-        return processedContent;
-
+        // Convert [[note-id|Note Title]] to [Note Title](#note-id)
+        return content.replace(/\[\[(.*?)\|(.*?)\]\]/g, '[$2](#$1)');
     }, [content]);
 
-    useEffect(() => {
-        const container = containerRef.current;
-        if (!container || !onLinkClick) return;
-
-        const handleInternalLinkClick = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
-            if (target.tagName === 'A' && target.classList.contains('internal-link')) {
-                e.preventDefault();
-                const noteId = target.getAttribute('data-note-id');
-                if (noteId) {
-                    onLinkClick(noteId);
-                }
-            }
-        };
-
-        container.addEventListener('click', handleInternalLinkClick);
-        return () => {
-            container.removeEventListener('click', handleInternalLinkClick);
-        };
-    }, [htmlContent, onLinkClick]);
-
-    return <div ref={containerRef} className="prose prose-invert max-w-none leading-relaxed text-gray-300" dangerouslySetInnerHTML={{ __html: htmlContent }} />;
+    return (
+        <div className="prose prose-invert max-w-none leading-relaxed text-gray-300">
+            <ReactMarkdown 
+                remarkPlugins={[remarkGfm]} 
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                    // Custom handler for links to support internal note switching
+                    a: ({ node: _node, ...props }) => {
+                        const isInternal = props.href?.startsWith('#');
+                        if (isInternal && onLinkClick) {
+                            return (
+                                <a 
+                                    {...props} 
+                                    className="internal-link text-cyan-400 hover:underline cursor-pointer"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        onLinkClick(props.href!.substring(1));
+                                    }}
+                                >
+                                    {props.children}
+                                </a>
+                            );
+                        }
+                        return <a {...props} className="text-purple-400 hover:text-purple-300" target="_blank" rel="noopener noreferrer" />;
+                    },
+                    // Styling for other elements to match the app aesthetic
+                    table: ({ node: _node, ...props }) => (
+                        <div className="overflow-x-auto my-6 rounded-xl border border-gray-800">
+                            <table {...props} className="min-w-full divide-y divide-gray-800" />
+                        </div>
+                    ),
+                    th: ({ node: _node, ...props }) => <th {...props} className="px-4 py-3 bg-gray-900/50 text-left text-xs font-bold text-gray-400 uppercase tracking-wider" />,
+                    td: ({ node: _node, ...props }) => <td {...props} className="px-4 py-3 text-sm text-gray-400 border-t border-gray-800" />,
+                    code: ({ node: _node, inline, ...props }: any) => (
+                        inline 
+                            ? <code {...props} className="bg-gray-800 text-pink-300 px-1.5 py-0.5 rounded text-xs font-mono" />
+                            : <code {...props} className="block bg-gray-900/80 text-cyan-300 p-4 rounded-xl border border-gray-800 my-4 text-sm font-mono overflow-x-auto" />
+                    ),
+                    blockquote: ({ node: _node, ...props }) => (
+                        <blockquote {...props} className="border-l-4 border-purple-500/50 bg-purple-500/5 px-6 py-4 my-6 italic text-gray-400 rounded-r-xl" />
+                    )
+                }}
+            >
+                {processedContent}
+            </ReactMarkdown>
+        </div>
+    );
 };
 
 // --- SUB-COMPONENT FOR SONGWRITER TOOLBAR ---

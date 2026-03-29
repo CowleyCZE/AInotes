@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
-import { Note, Category, AIAction } from '../src/types';
+import React, { useState, useEffect } from 'react';
+import { Note, Category, AIAction } from '../types';
 import { 
     BrainIcon, UndoIcon, LinkIcon, SaveIcon, EditIcon, 
     TrashIcon, CopyIcon, SummarizeIcon, GrammarIcon, 
-    TranslateIcon, SparklesIcon, XIcon, MusicIcon, ActivityIcon, PlusIcon
+    TranslateIcon, SparklesIcon, XIcon, MusicIcon, ActivityIcon, PlusIcon, ClockIcon
 } from './Icons';
 import { SimpleMarkdownRenderer } from './SimpleMarkdownRenderer';
+import { SlashCommandMenu } from './SlashCommandMenu';
 import { deepLyricScan } from '../services/geminiService';
+import { VersionHistoryPanel } from './VersionHistoryPanel';
+import { formatDate } from '../services/utils';
 
 interface NoteViewProps {
     selectedNote: Note;
@@ -22,6 +25,9 @@ interface NoteViewProps {
     handleTagInputKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
     setIsEditing: (val: boolean) => void;
     handleCancelEditing: () => void;
+    handleSaveNote: () => void;
+    setIsFocusMode: (val: React.SetStateAction<boolean>) => void;
+    autoTitle: (content: string) => Promise<void>;
     handleUndo: () => void;
     handleFindConnections: () => void;
     isLinkingLoading: boolean;
@@ -43,20 +49,22 @@ interface NoteViewProps {
     isAppendingAI: boolean;
     categories: Category[];
     onInternalLinkClick: (id: string) => void;
+    onClose: () => void;
 }
 
 export const NoteView: React.FC<NoteViewProps> = ({
     selectedNote, isEditing, editingTitle, setEditingTitle,
     editingContent, setEditingContent, editingTags, removeEditingTag,
     tagInput, handleTagInputChange, handleTagInputKeyDown,
-    setIsEditing, handleCancelEditing, handleUndo, handleFindConnections,
+    setIsEditing, handleCancelEditing, handleSaveNote, setIsFocusMode, autoTitle, handleUndo, handleFindConnections,
     isLinkingLoading, setNoteToDeleteId, toggleChatMode, saveStatus,
     error, contentAreaRef, handleMouseUp, toolbarPosition,
     handleCopyText, handleAIAction, isAIActionLoading, handleAIProcess,
     isLoadingAI, textToAppend, setTextToAppend, handleAIAppend,
-    isAppendingAI, categories, onInternalLinkClick
+    isAppendingAI, categories, onInternalLinkClick, onClose
 }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [showHistory, setShowHistory] = useState(false);
 
     const handleDeepScan = async () => {
         setIsAnalyzing(true);
@@ -64,20 +72,73 @@ export const NoteView: React.FC<NoteViewProps> = ({
             const result = await deepLyricScan(editingContent);
             console.log("Deep Scan Result:", result);
             alert("AI analýza rytmu a rýmů dokončena. Podrobnosti v konzoli.");
-        } catch (e) {
+        } catch (_e) {
             alert("Analýza selhala.");
         } finally {
             setIsAnalyzing(false);
         }
     };
 
+    const [slashMenu, setSlashMenu] = useState<{ position: { top: number; left: number } } | null>(null);
+
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (e.key === '/') {
+            // Zobrazení slash menu (zjednodušená pozice)
+            setSlashMenu({ position: { top: 300, left: 400 } });
+        }
+    };
+
+    const handleInsertCommand = (cmd: string) => {
+        setEditingContent(prev => prev + (prev.endsWith('\n') ? '' : '\n') + cmd + '\n');
+    };
+
+    const restoreVersion = (index: number) => {
+        if (!selectedNote.history || index < 0 || index >= selectedNote.history.length) return;
+        setEditingContent(selectedNote.history[index]);
+    };
+
     const categoryName = categories.find(c => c.id === selectedNote.categoryId)?.name || 'Bez kategorie';
+
+    // Klávesová zkratka pro uložení (Ctrl+S)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                handleSaveNote();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleSaveNote]);
+
+    const handleExportMarkdown = () => {
+        const blob = new Blob([editingContent], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${editingTitle.replace(/\s+/g, '_') || 'poznámka'}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleExportPDF = () => {
+        window.print();
+    };
 
     return (
         <div className="flex-1 flex flex-col h-full overflow-hidden bg-gray-950/40 relative">
             {/* Note Toolbar */}
             <header className="h-14 border-b border-gray-800 flex items-center justify-between px-6 bg-gray-900/20 backdrop-blur-md sticky top-0 z-20">
                 <div className="flex items-center gap-4 overflow-hidden">
+                    <button 
+                        onClick={onClose}
+                        className="p-2 -ml-2 text-gray-500 hover:text-white transition-colors lg:hidden"
+                        title="Zavřít poznámku"
+                    >
+                        <XIcon className="h-5 w-5" />
+                    </button>
                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider whitespace-nowrap ${selectedNote.type === 'music' ? 'bg-purple-500/20 text-purple-400' : 'bg-gray-800 text-gray-500'}`}>
                         {selectedNote.type === 'music' ? 'Music Project' : 'General Note'}
                     </span>
@@ -91,6 +152,15 @@ export const NoteView: React.FC<NoteViewProps> = ({
                         {saveStatus === 'saved' && <span className="text-green-500">Uloženo ✓</span>}
                     </div>
                     
+                    <button onClick={handleExportMarkdown} className="p-2 text-gray-400 hover:text-white transition-colors" title="Exportovat jako Markdown">
+                        <SaveIcon className="h-4 w-4" />
+                    </button>
+                    <button onClick={handleExportPDF} className="p-2 text-gray-400 hover:text-white transition-colors" title="Tisk / Export do PDF">
+                        <CopyIcon className="h-4 w-4" />
+                    </button>
+                    <button onClick={() => setIsFocusMode(prev => !prev)} className="p-2 text-gray-400 hover:text-yellow-400 transition-colors" title="Focus Mode"><SparklesIcon className="h-4 w-4" /></button>
+                    <button onClick={() => autoTitle(editingContent)} className="p-2 text-gray-400 hover:text-blue-400 transition-colors" title="Navrhnout název"><BrainIcon className="h-4 w-4" /></button>
+                    <button onClick={() => setShowHistory(prev => !prev)} className={`p-2 transition-colors ${showHistory ? 'text-purple-400' : 'text-gray-400 hover:text-purple-400'}`} title="Historie verzí"><ClockIcon className="h-4 w-4" /></button>
                     <button onClick={handleUndo} disabled={!selectedNote.history?.length} className="p-2 text-gray-400 hover:text-white transition-colors disabled:opacity-30" title="Zpět (Undo)"><UndoIcon className="h-4 w-4" /></button>
                     <button onClick={handleFindConnections} disabled={isLinkingLoading} className={`p-2 transition-colors ${isLinkingLoading ? 'text-purple-500 animate-spin' : 'text-gray-400 hover:text-cyan-400'}`} title="Hledat souvislosti"><LinkIcon className="h-4 w-4" /></button>
                     <button onClick={toggleChatMode} className="p-2 text-gray-400 hover:text-purple-400 transition-colors" title="Chat s poznámkami"><BrainIcon className="h-4 w-4" /></button>
@@ -105,7 +175,7 @@ export const NoteView: React.FC<NoteViewProps> = ({
                     ) : (
                         <div className="flex items-center gap-2">
                             <button onClick={handleCancelEditing} className="p-2 text-gray-400 hover:text-white transition-colors"><XIcon className="h-4 w-4" /></button>
-                            <button onClick={() => setIsEditing(false)} className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-all"><SaveIcon className="h-4 w-4" /> <span className="hidden sm:inline">Hotovo</span></button>
+                            <button onClick={() => { handleSaveNote(); setIsEditing(false); }} className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold transition-all"><SaveIcon className="h-4 w-4" /> <span className="hidden sm:inline">Hotovo</span></button>
                         </div>
                     )}
                 </div>
@@ -154,19 +224,30 @@ export const NoteView: React.FC<NoteViewProps> = ({
 
                         {error && <div className="bg-red-950/30 border border-red-500/20 text-red-400 p-4 rounded-xl mb-6 text-sm flex items-center gap-3"><XIcon className="h-4 w-4" /> {error}</div>}
 
+                        {/* Slash Menu */}
+                        {slashMenu && (
+                            <SlashCommandMenu 
+                                position={slashMenu.position} 
+                                onSelect={(cmd) => {
+                                    handleInsertCommand(cmd);
+                                    setSlashMenu(null);
+                                }}
+                                onClose={() => setSlashMenu(null)}
+                            />
+                        )}
                         {isEditing ? (
-                            <textarea 
+                            <textarea
                                 value={editingContent}
+                                onKeyDown={handleKeyDown}
                                 onChange={(e) => setEditingContent(e.target.value)}
-                                className="flex-1 bg-transparent border-none outline-none text-gray-300 text-lg leading-relaxed resize-none placeholder-gray-800 font-mono"
+                                className="flex-1 w-full bg-transparent border-none outline-none text-gray-300 text-lg leading-relaxed resize-none placeholder-gray-800 font-mono"
                                 placeholder="Zde začněte psát svůj příběh nebo song..."
                             />
                         ) : (
                             <div className="flex-1 prose prose-invert max-w-none prose-p:leading-relaxed prose-p:text-gray-300">
-                                <SimpleMarkdownRenderer content={selectedNote.content} onInternalLinkClick={onInternalLinkClick} />
+                                <SimpleMarkdownRenderer content={selectedNote.content} onLinkClick={onInternalLinkClick} />
                             </div>
-                        )}
-                    </div>
+                        )}                    </div>
                 </div>
 
                 {/* Right Sidebar - Dynamic AI Tools */}
@@ -255,8 +336,22 @@ export const NoteView: React.FC<NoteViewProps> = ({
                             </div>
                         </section>
                     )}
+
                 </aside>
             </div>
+
+            {/* Version History Panel (Floating Sidebar) */}
+            {showHistory && (
+                <VersionHistoryPanel 
+                    history={selectedNote.history || []}
+                    currentContent={editingContent}
+                    onRestore={(index) => {
+                        restoreVersion(index);
+                        setShowHistory(false);
+                    }}
+                    onClose={() => setShowHistory(false)}
+                />
+            )}
 
             {/* Selection Toolbar (Floating) */}
             {toolbarPosition && (

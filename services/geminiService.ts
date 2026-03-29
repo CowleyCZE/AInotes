@@ -1,10 +1,11 @@
-import { Note, Category, AIAction, RhymeAnalysis, AnalysisResult, AiMode } from '../src/types';
+import { Note, Category, AIAction, RhymeAnalysis, AnalysisResult, AiMode } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
 const OLLAMA_BASE_URL = 'http://localhost:11434';
-const PRIMARY_OLLAMA_MODEL = 'qwen2.5-coder:1.5b'; // Pro JSON a logiku (rychlý)
-const CREATIVE_OLLAMA_MODEL = 'qwen2.5:3b';       // Pro text, chat a rýmy (chytrý)
-const FALLBACK_OLLAMA_MODEL = 'qwen2.5:3b';
+// Defaultní lehčí modely pro stabilitu v Termuxu
+export const PRIMARY_OLLAMA_MODEL = 'qwen2.5-coder:0.5b'; // Pro JSON a logiku (rychlý)
+export const CREATIVE_OLLAMA_MODEL = 'qwen2.5:1.5b';       // Pro text, chat a rýmy (chytrý)
+const FALLBACK_OLLAMA_MODEL = 'qwen2.5:0.5b';
 
 // Gemini configuration
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
@@ -14,6 +15,7 @@ const GEMINI_MODEL = "gemini-1.5-flash";
 // Helper for Ollama
 async function callOllama(messages: object[], format: string | null = null, model: string = PRIMARY_OLLAMA_MODEL): Promise<string> {
   const performRequest = async (modelToUse: string) => {
+      console.log(`[Ollama] Volám model: ${modelToUse}`);
       const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -22,20 +24,29 @@ async function callOllama(messages: object[], format: string | null = null, mode
           messages: messages,
           stream: false,
           format: format,
-          options: { temperature: 0.7, num_ctx: 4096 }
+          options: { 
+            temperature: 0.7, 
+            num_ctx: 4096,
+            num_predict: 2048,
+            low_vram: true // Optimalizace pro málo RAM
+          }
         }),
       });
 
-      if (!response.ok) throw new Error(`Ollama error: ${response.status}`);
+      if (!response.ok) {
+          const errorData = await response.text().catch(() => "Neznámá chyba");
+          throw new Error(`Ollama error (${response.status}): ${errorData}`);
+      }
       const data = await response.json();
       return data.message.content;
   };
 
   try {
     return await performRequest(model);
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error(`Chyba modelu ${model}:`, error);
     if (model !== FALLBACK_OLLAMA_MODEL) {
-        console.warn(`Model ${model} failed, trying fallback ${FALLBACK_OLLAMA_MODEL}...`);
+        console.warn(`Model ${model} selhal, zkouším fallback ${FALLBACK_OLLAMA_MODEL}...`);
         return await performRequest(FALLBACK_OLLAMA_MODEL);
     }
     throw error;
@@ -46,15 +57,12 @@ async function callOllama(messages: object[], format: string | null = null, mode
 async function callAI(systemPrompt: string, userPrompt: string, isJson: boolean = false, model: string = PRIMARY_OLLAMA_MODEL): Promise<string> {
     if (client) {
         try {
-            const response = await client.models.generateContent({
+            console.log(`[Gemini] Používám API: ${GEMINI_MODEL}`);
+            const response = await client.getGenerativeModel({ 
                 model: GEMINI_MODEL,
-                contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-                config: {
-                    systemInstruction: systemPrompt,
-                    responseMimeType: isJson ? 'application/json' : 'text/plain'
-                }
-            });
-            const text = response.text || '';
+                systemInstruction: systemPrompt 
+            }).generateContent(userPrompt);
+            const text = response.response.text();
             return isJson ? text.replace(/```json/g, '').replace(/```/g, '').trim() : text;
         } catch (error) {
             console.error("Gemini API failed, falling back to Ollama:", error);
@@ -82,7 +90,7 @@ export interface AppendResult {
   appendedContent: string;
 }
 
-export const processNoteWithAI = async (rawText: string, existingCategories: Category[]): Promise<ProcessedNote> => {
+export const processNoteWithAI = async (rawText: string, existingCategories: Category[], model: string = PRIMARY_OLLAMA_MODEL): Promise<ProcessedNote> => {
   const categoryNames = existingCategories.map(c => c.name).join(', ');
   const systemPrompt = `Jsi asistent pro organizaci poznámek. Analyzuj text a vrať JSON.
 Urči, zda jde o běžnou poznámku ("general") nebo hudební text/nápad ("music").
@@ -96,20 +104,20 @@ Vrať POUZE tento JSON:
   "type": "general" | "music"
 }`;
 
-  const response = await callAI(systemPrompt, rawText, true, PRIMARY_OLLAMA_MODEL);
+  const response = await callAI(systemPrompt, rawText, true, model);
   return JSON.parse(response);
 };
 
-export const formatAndAppendTextWithAI = async (newText: string, existingContent: string): Promise<AppendResult> => {
+export const formatAndAppendTextWithAI = async (newText: string, existingContent: string, model: string = PRIMARY_OLLAMA_MODEL): Promise<AppendResult> => {
   const systemPrompt = `Naformátuj NOVÝ text pomocí Markdown v kontextu existující poznámky.
 Vrať POUZE JSON: { "appendedContent": "markdown text" }`;
   const userPrompt = `EXISTUJÍCÍ OBSAH (prvních 500 znaků): ${existingContent.substring(0, 500)}...\n\nNOVÝ TEXT K PŘIDÁNÍ: ${newText}`;
 
-  const response = await callAI(systemPrompt, userPrompt, true, PRIMARY_OLLAMA_MODEL);
+  const response = await callAI(systemPrompt, userPrompt, true, model);
   return JSON.parse(response);
 };
 
-export const performAIQuickAction = async (selectedText: string, fullNoteContent: string, action: AIAction): Promise<string> => {
+export const performAIQuickAction = async (selectedText: string, fullNoteContent: string, action: AIAction, model: string = CREATIVE_OLLAMA_MODEL): Promise<string> => {
     let systemRole = 'Jsi asistent.';
     let prompt = '';
 
@@ -129,61 +137,107 @@ export const performAIQuickAction = async (selectedText: string, fullNoteContent
     }
 
     // Quick Actions use Creative Model for better language flow
-    return await callAI(systemRole, prompt, false, CREATIVE_OLLAMA_MODEL);
+    return await callAI(systemRole, prompt, false, model);
 };
 
-export const deepLyricScan = async (lyrics: string, mode: AiMode = AiMode.AUTO): Promise<AnalysisResult> => {
+export const deepLyricScan = async (lyrics: string, mode: AiMode = AiMode.AUTO, model: string = CREATIVE_OLLAMA_MODEL): Promise<AnalysisResult> => {
     const systemPrompt = `Jsi "Lyric Architect". Analyzuj text a rozděl ho na segmenty.
 Detekuj rytmické chyby, slabé rýmy a navrhni 3 varianty pro každý segment.
 Vrať POUZE JSON typu AnalysisResult.
-Struktura: { segments: [{ id, originalText, isProblematic, issueDescription, variants: [{id, text, type}], selectedVariantId: null, smartSuggestions: [{id, type, text, description, confidence}] }], mode: "${mode}" }`;
+Struktura: { "segments": [{ "id": "1", "originalText": "...", "isProblematic": true, "issueDescription": "...", "variants": [{ "id": "1a", "text": "...", "type": "..." }], "selectedVariantId": null, "smartSuggestions": [] }], "mode": "${mode}" }`;
     
-    const response = await callAI(systemPrompt, lyrics, true, CREATIVE_OLLAMA_MODEL);
+    const response = await callAI(systemPrompt, lyrics, true, model);
     return JSON.parse(response);
 };
 
+// Helper for finding relevant notes (Simple RAG)
+const findRelevantNotes = (query: string, notes: Note[], limit: number = 5): Note[] => {
+    const searchTerms = query.toLowerCase().split(/\s+/).filter(t => t.length > 2);
+    if (searchTerms.length === 0) return notes.slice(0, limit);
+
+    const scoredNotes = notes.map(note => {
+        let score = 0;
+        const content = (note.title + " " + note.content + " " + (note.tags?.join(" ") || "")).toLowerCase();
+        
+        searchTerms.forEach(term => {
+            if (content.includes(term)) {
+                score += 1;
+                // Bonus for title match
+                if (note.title.toLowerCase().includes(term)) score += 2;
+            }
+        });
+        return { note, score };
+    });
+
+    return scoredNotes
+        .filter(sn => sn.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit)
+        .map(sn => sn.note);
+};
 
 // Streaming Chat Session
-class AISession {
+export class AISession {
     private chat: any = null;
-    private ollamaHistory: any[] = [];
+    private ollamaHistory: { role: string; content: string }[] = [];
     private systemInstruction: string;
+    private model: string;
+    private allNotes: Note[];
 
-    constructor(systemInstruction: string) {
-        this.systemInstruction = systemInstruction;
+    constructor(allNotes: Note[], model: string = CREATIVE_OLLAMA_MODEL) {
+        this.allNotes = allNotes;
+        this.model = model;
+        this.systemInstruction = `Jsi osobní AI asistent pro správu poznámek. 
+Odpovídej česky, buď stručný, ale nápomocný. 
+Pokud se uživatel ptá na něco, co má v poznámkách, použij poskytnutý kontext.
+Pokud v poznámkách odpověď není, řekni to, ale zkus odpovědět obecně.`;
+        
         if (client) {
-            this.chat = client.chats.create({
-                model: GEMINI_MODEL,
-                config: { systemInstruction: systemInstruction }
+            this.chat = client.getGenerativeModel({ 
+                model: GEMINI_MODEL
+            }).startChat({
+                history: [],
+                generationConfig: {
+                    maxOutputTokens: 2048,
+                }
             });
         }
-        this.ollamaHistory.push({ role: 'system', content: systemInstruction });
-    }
-async *sendMessageStream(request: { message: string }) {
-    if (this.chat) {
-        try {
-            const responseStream = await this.chat.sendMessageStream(request.message);
-            for await (const chunk of responseStream) {
-                const text = chunk.text();
-                yield { text };
-            }
-            return;
-        } catch (error) {
-            console.error("Gemini stream failed, falling back to Ollama:", error);
-            this.chat = null; 
-        }
+        this.ollamaHistory.push({ role: 'system', content: this.systemInstruction });
     }
 
+    async *sendMessageStream(message: string) {
+        // RAG: Najít relevantní poznámky pro tento konkrétní dotaz
+        const relevantNotes = findRelevantNotes(message, this.allNotes);
+        const context = relevantNotes.length > 0 
+            ? "\n\nRELEVANTNÍ POZNÁMKY PRO KONTEXT:\n" + relevantNotes.map(n => `--- ${n.title} ---\n${n.content}`).join("\n\n")
+            : "\n\n(Žádné relevantní poznámky nebyly nalezeny.)";
+
+        const augmentedMessage = `UŽIVATELŮV DOTAZ: ${message}${context}`;
+
+        if (this.chat) {
+            try {
+                const result = await this.chat.sendMessageStream(augmentedMessage);
+                for await (const chunk of result.stream) {
+                    const text = chunk.text();
+                    yield { text };
+                }
+                return;
+            } catch (error) {
+                console.error("Gemini stream failed, falling back to Ollama:", error);
+                this.chat = null; 
+            }
+        }
+
         // Ollama Fallback
-        this.ollamaHistory.push({ role: 'user', content: request.message });
+        this.ollamaHistory.push({ role: 'user', content: augmentedMessage });
         const response = await fetch(`${OLLAMA_BASE_URL}/api/chat`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: CREATIVE_OLLAMA_MODEL,
+                model: this.model,
                 messages: this.ollamaHistory,
                 stream: true,
-                options: { temperature: 0.7, num_ctx: 4096 }
+                options: { temperature: 0.7, num_ctx: 4096, low_vram: true }
             }),
         });
 
@@ -203,23 +257,18 @@ async *sendMessageStream(request: { message: string }) {
                     const text = json.message.content;
                     fullContent += text;
                     yield { text };
-                } catch (e) {}
+                } catch (_e) {}
             }
         }
         this.ollamaHistory.push({ role: 'assistant', content: fullContent });
     }
 }
 
-export const initializeChatWithNotes = (allNotes: Note[]): any => {
-    const notesContext = allNotes.map(note => `- ${note.title}: ${note.content.substring(0, 200)}...`).join('\n');
-    const systemInstruction = `Jsi osobní AI asistent. Máš přístup k uživatelovým poznámkám:
-${notesContext}
-Odpovídej česky, buď nápomocný a věcný.`;
-
-    return new AISession(systemInstruction);
+export const initializeChatWithNotes = (allNotes: Note[], model: string = CREATIVE_OLLAMA_MODEL): AISession => {
+    return new AISession(allNotes, model);
 };
 
-export const findSmartConnections = async (currentNoteId: string, currentContent: string, allNotes: Note[]): Promise<any[]> => {
+export const findSmartConnections = async (currentNoteId: string, currentContent: string, allNotes: Note[], model: string = PRIMARY_OLLAMA_MODEL): Promise<any[]> => {
     const otherNotes = allNotes.filter(n => n.id !== currentNoteId);
     if (otherNotes.length === 0) return [];
 
@@ -232,47 +281,36 @@ Vrať POUZE JSON pole. Pokud nic nenajdeš, vrať [].`;
     const userPrompt = `AKTUÁLNÍ POZNÁMKA:\n${currentContent}\n\nDOSTUPNÉ POZNÁMKY K PROPOJENÍ:\n${notesSummary}`;
 
     try {
-        const response = await callAI(systemPrompt, userPrompt, true, PRIMARY_OLLAMA_MODEL);
+        const response = await callAI(systemPrompt, userPrompt, true, model);
         return JSON.parse(response);
-    } catch (e) {
+    } catch (_e) {
         return [];
     }
 };
 
-export const createNoteFromAudio = async (base64Audio: string, mimeType: string, existingCategories: Category[]): Promise<ProcessedNote> => {
+export const createNoteFromAudio = async (base64Audio: string, mimeType: string, _existingCategories: Category[]): Promise<ProcessedNote> => {
     if (!client) throw new Error("Hlasové poznámky vyžadují Gemini API klíč.");
     
     const prompt = "Přepiš toto audio do strukturované poznámky v češtině. Vrať JSON: { title, category, formattedContent, tags }";
     
-    const response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: [
-            {
-                role: 'user',
-                parts: [
-                    { text: prompt },
-                    { inlineData: { data: base64Audio, mimeType } }
-                ]
-            }
-        ],
-        config: { responseMimeType: 'application/json' }
-    });
+    const model = client.getGenerativeModel({ model: GEMINI_MODEL });
+    const response = await model.generateContent([
+        prompt,
+        { inlineData: { data: base64Audio, mimeType } }
+    ]);
     
-    const text = response.text || '';
+    const text = response.response.text();
     const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
     return JSON.parse(cleanText);
 };
 
-export interface RhymeAnalysis {
-    rhymes: { word: string; line: number; rhymeWith: { word: string; line: number; type: string }[] }[];
-    meter: { pattern: string; syllables: number[]; suggestions: string[] };
-    stats: { totalLines: number; rhymedLines: number; rhymeScheme: string };
-}
-
-export const analyzeLyricsRhymeAndMeter = async (lyrics: string): Promise<RhymeAnalysis> => {
-    const systemPrompt = `Jsi expert na českou poezii. Analyzuj text a vrať JSON s analýzou rýmů a metriky.
-Struktura: { rhymes: [{word, line, rhymeWith: [{word, line, type}]}], meter: {pattern, syllables: [], suggestions: []}, stats: {totalLines, rhymedLines, rhymeScheme} }`;
+export const analyzeLyricsRhymeAndMeter = async (lyrics: string, model: string = CREATIVE_OLLAMA_MODEL): Promise<RhymeAnalysis> => {
+    const systemPrompt = `Jsi expert na českou poezii...`;
     
-    const response = await callAI(systemPrompt, lyrics, true, CREATIVE_OLLAMA_MODEL);
-    return JSON.parse(response);
+    const response = await callAI(systemPrompt, lyrics, true, model);
+    try {
+        return JSON.parse(response);
+    } catch (__) {
+        throw new Error("AI vrátilo neplatný formát analýzy.");
+    }
 };

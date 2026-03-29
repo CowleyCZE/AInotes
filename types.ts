@@ -18,6 +18,7 @@ export interface Note {
 export interface Category {
   id: string;
   name: string;
+  parentId?: string; // ID nadřazené kategorie pro hierarchii
 }
 
 export type AIAction = 'summarize' | 'fix_grammar' | 'translate_en';
@@ -30,6 +31,42 @@ export interface ChatMessage {
 }
 
 export interface RhymeAnalysis {
-  rhymingWords: string[];
-  rhymeScheme: string;
+  rhymes: { word: string; line: number; rhymeWith: { word: string; line: number; type: string }[] }[];
+  meter: { pattern: string; syllables: number[]; suggestions: string[] };
+  stats: { totalLines: number; rhymedLines: number; rhymeScheme: string };
+}
+
+export enum AiMode {
+  AUTO = 'auto',
+  CREATIVE = 'creative',
+  TECHNICAL = 'technical'
+}
+
+export interface SmartSuggestion {
+  id: string;
+  type: 'enhancement' | 'alternative' | 'rhyme' | 'flow' | 'mood';
+  text: string;
+  description: string;
+  confidence: number;
+}
+
+export interface Variant {
+  id: string;
+  text: string;
+  type: string;
+}
+
+export interface LyricSegment {
+  id: string;
+  originalText: string;
+  isProblematic: boolean;
+  issueDescription?: string;
+  variants: Variant[];
+  selectedVariantId: string | null;
+  smartSuggestions: SmartSuggestion[];
+}
+
+export interface AnalysisResult {
+  segments: LyricSegment[];
+  mode: AiMode;
 }

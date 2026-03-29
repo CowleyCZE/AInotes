@@ -21,7 +21,7 @@
       background: transparent;
     }
     ::-webkit-scrollbar-thumb {
-      background: rgba(139, 92, 246, 0.2); /* purple-500 with low opacity */
+      background: rgba(139, 92, 246, 0.2);
       border-radius: 10px;
       transition: all 0.3s ease;
     }
@@ -29,12 +29,10 @@
       background: rgba(139, 92, 246, 0.4);
     }
 
-    /* Hide scrollbar for clean inputs but keep functionality */
     .hide-scrollbar::-webkit-scrollbar {
       display: none;
     }
 
-    /* Selection styling */
     ::selection {
       background: rgba(139, 92, 246, 0.3);
       color: white;
@@ -56,22 +54,8 @@
         animation: glow 2s ease-in-out infinite;
     }
   </style>
-<script type="importmap">
-{
-  "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js",
-    "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js",
-    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
-  }
-}
-</script>
 </head>
-<body class="bg-gray-900 text-gray-100">
+<body class="bg-gray-950 text-gray-100">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

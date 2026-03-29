@@ -2,6 +2,7 @@ import React from 'react';
 import { Note, RhymeAnalysis } from '../types';
 import { MusicIcon, XIcon, ClockIcon } from './Icons';
 import { SimpleMarkdownRenderer, SongwriterSourceToolbar } from './SimpleMarkdownRenderer';
+import { MetaTagToolbar } from './MetaTagToolbar';
 import { formatDate } from '../services/utils';
 
 interface SongwriterStudioProps {
@@ -27,6 +28,8 @@ interface SongwriterStudioProps {
     compositionContent: string;
     setCompositionContent: (val: string) => void;
     saveCompositionToLocalStorage: () => void;
+    creativeModel: string;
+    setCreativeModel: (val: string) => void;
 }
 
 const songwriterColors = ['bg-purple-900/40 border-purple-500', 'bg-teal-900/40 border-teal-500', 'bg-green-900/40 border-green-500', 'bg-orange-900/40 border-orange-500'];
@@ -53,7 +56,9 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
     setAutoNumbering,
     compositionContent,
     setCompositionContent,
-    saveCompositionToLocalStorage
+    saveCompositionToLocalStorage,
+    creativeModel,
+    setCreativeModel
 }) => {
     const isGridMode = selectedSongwriterNotes.length > 2;
 
@@ -65,6 +70,21 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
                 </div>
                 
                 <div className="flex items-center gap-3 flex-wrap">
+                    {/* Model Selector */}
+                    <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-2 py-1 border border-purple-500/20">
+                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-tighter">AI Model:</span>
+                        <select 
+                            value={creativeModel}
+                            onChange={(e) => setCreativeModel(e.target.value)}
+                            className="bg-transparent text-xs text-purple-400 focus:outline-none cursor-pointer border-none p-0 pr-4"
+                        >
+                            <option value="qwen2.5:0.5b">Qwen 0.5b (Ultra Lite)</option>
+                            <option value="qwen2.5:1.5b">Qwen 1.5b (Lite)</option>
+                            <option value="qwen2.5:3b">Qwen 3b (Smart - heavy)</option>
+                            <option value="gemma:2b">Gemma 2b</option>
+                        </select>
+                    </div>
+
                     <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-3 py-1.5">
                         <span className="text-xs text-gray-400">Sync:</span>
                         <button 
@@ -204,7 +224,7 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
                         </div>
                     ) : (
                         <div className="text-center py-4 text-gray-500">
-                            Pro zobrazení analýzy klikněte na tlačítko "Analýza"
+                            Pro zobrazení analýzy klikněte na tlačítko &quot;Analýza&quot;
                         </div>
                     )}
                 </div>
@@ -292,13 +312,22 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
                         </button>
                     </div>
                 </div>
-                <div 
-                   className="flex-1 p-4 overflow-y-auto focus:outline-none text-gray-200 font-mono text-sm leading-relaxed whitespace-pre-wrap"
-                   contentEditable
-                   suppressContentEditableWarning
-                   onInput={(e) => setCompositionContent(e.currentTarget.textContent || '')}
-                >
-                    {compositionContent}
+                <div className="flex-1 flex overflow-hidden">
+                    <div 
+                       className="flex-1 p-4 overflow-y-auto focus:outline-none text-gray-200 font-mono text-sm leading-relaxed whitespace-pre-wrap min-h-[100px]"
+                       contentEditable
+                       suppressContentEditableWarning
+                       onInput={(e) => {
+                           const target = e.currentTarget as HTMLDivElement;
+                           setCompositionContent(target.innerText || '');
+                       }}
+                       onBlur={() => saveCompositionToLocalStorage()}
+                    >
+                        {compositionContent}
+                    </div>
+                    <MetaTagToolbar onInsert={(tag) => {
+                        setCompositionContent(compositionContent + (compositionContent.endsWith('\n') ? '' : '\n') + tag + '\n');
+                    }} />
                 </div>
             </div>
        </div>
