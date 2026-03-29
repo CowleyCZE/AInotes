@@ -224,17 +224,20 @@ export function useNotes() {
         setIsEditing(true);
     };
 
-    const handleDeleteNote = async () => {
-        if (!noteToDeleteId) return;
-        setNotes(prev => prev.filter(n => n.id !== noteToDeleteId));
-        if (selectedNoteId === noteToDeleteId) {
+    const handleDeleteNote = useCallback((noteId: string, onNoteDeleted?: () => void) => {
+        setNotes(prev => prev.filter(n => n.id !== noteId));
+        if (selectedNoteId === noteId) {
             setSelectedNoteId(null);
             setEditingContent("");
             setEditingTitle("");
+            setEditingTags([]);
         }
-        setNoteToDeleteId(null);
+        // Callback pro cleanup v jiných hookech (např. removeNoteFromStudio)
+        if (onNoteDeleted) {
+            onNoteDeleted();
+        }
         setToast({ message: "Poznámka smazána", type: 'success' });
-    };
+    }, [selectedNoteId]);
 
     const restoreVersion = (versionIndex: number) => {
         if (!selectedNote || !selectedNote.history || versionIndex >= selectedNote.history.length) return;

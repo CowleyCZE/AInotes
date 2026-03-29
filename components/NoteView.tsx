@@ -26,12 +26,12 @@ interface NoteViewProps {
     setIsEditing: (val: boolean) => void;
     handleCancelEditing: () => void;
     handleSaveNote: () => void;
+    handleDeleteNote: (noteId: string) => void;
     setIsFocusMode: (val: React.SetStateAction<boolean>) => void;
     autoTitle: (content: string) => Promise<void>;
     handleUndo: () => void;
     handleFindConnections: () => void;
     isLinkingLoading: boolean;
-    setNoteToDeleteId: (id: string) => void;
     toggleChatMode: () => void;
     saveStatus: string;
     error: string | null;
@@ -56,8 +56,8 @@ export const NoteView: React.FC<NoteViewProps> = ({
     selectedNote, isEditing, editingTitle, setEditingTitle,
     editingContent, setEditingContent, editingTags, removeEditingTag,
     tagInput, handleTagInputChange, handleTagInputKeyDown,
-    setIsEditing, handleCancelEditing, handleSaveNote, setIsFocusMode, autoTitle, handleUndo, handleFindConnections,
-    isLinkingLoading, setNoteToDeleteId, toggleChatMode, saveStatus,
+    setIsEditing, handleCancelEditing, handleSaveNote, handleDeleteNote, setIsFocusMode, autoTitle, handleUndo, handleFindConnections,
+    isLinkingLoading, toggleChatMode, saveStatus,
     error, contentAreaRef, handleMouseUp, toolbarPosition,
     handleCopyText, handleAIAction, isAIActionLoading, handleAIProcess,
     isLoadingAI, textToAppend, setTextToAppend, handleAIAppend,
@@ -170,7 +170,17 @@ export const NoteView: React.FC<NoteViewProps> = ({
                     {!isEditing ? (
                         <>
                             <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 border border-purple-500/30 px-3 py-1.5 rounded-lg text-sm font-bold transition-all"><EditIcon className="h-4 w-4" /> <span className="hidden sm:inline">Upravit</span></button>
-                            <button onClick={() => setNoteToDeleteId(selectedNote.id)} className="p-2 text-gray-400 hover:text-red-500 transition-colors"><TrashIcon className="h-4 w-4" /></button>
+                            <button 
+                                onClick={() => {
+                                    if (window.confirm(`Opravdu chcete smazat poznámku "${selectedNote.title || 'Bez názvu'}"?`)) {
+                                        handleDeleteNote(selectedNote.id);
+                                    }
+                                }} 
+                                className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                                title="Smazat poznámku"
+                            >
+                                <TrashIcon className="h-4 w-4" />
+                            </button>
                         </>
                     ) : (
                         <div className="flex items-center gap-2">

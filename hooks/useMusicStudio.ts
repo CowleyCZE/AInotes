@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RhymeAnalysis } from '../types';
+import { Note, RhymeAnalysis } from '../types';
 import { analyzeLyricsRhymeAndMeter } from '../services/geminiService';
 
 export function useMusicStudio() {
@@ -17,9 +17,30 @@ export function useMusicStudio() {
     const [showLyricModal, setShowLyricModal] = useState(false);
     const scrollSyncRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+    // Načtení uložených dat při startu
     useEffect(() => {
         const storedComposition = localStorage.getItem('ainotes_composition');
         if (storedComposition) setCompositionContent(storedComposition);
+        
+        const storedSelectedNotes = localStorage.getItem('ainotes_selected_songwriter_notes');
+        if (storedSelectedNotes) {
+            try {
+                setSelectedSongwriterNotes(JSON.parse(storedSelectedNotes));
+            } catch (e) {
+                console.error('Failed to parse selected notes:', e);
+                setSelectedSongwriterNotes([]);
+            }
+        }
+        
+        const storedSourceContents = localStorage.getItem('ainotes_source_note_contents');
+        if (storedSourceContents) {
+            try {
+                setSourceNoteContents(JSON.parse(storedSourceContents));
+            } catch (e) {
+                console.error('Failed to parse source contents:', e);
+                setSourceNoteContents({});
+            }
+        }
     }, []);
 
     const updateCompositionContent = (newContent: string) => {
@@ -27,13 +48,39 @@ export function useMusicStudio() {
         localStorage.setItem('ainotes_composition', newContent);
     };
 
+    const updateSelectedSongwriterNotes = (notes: string[]) => {
+        setSelectedSongwriterNotes(notes);
+        localStorage.setItem('ainotes_selected_songwriter_notes', JSON.stringify(notes));
+    };
+
+    const updateSourceNoteContents = (contents: Record<string, string>) => {
+        setSourceNoteContents(contents);
+        localStorage.setItem('ainotes_source_note_contents', JSON.stringify(contents));
+    };
+
     const addTextToComposition = (text: string, sourceId: string) => {
         const newContent = compositionContent + `\n\n[Zdroj: ${sourceId}]\n${text}`;
         updateCompositionContent(newContent);
-        setSourceNoteContents(prev => ({
+        updateSourceNoteContents(prev => ({
             ...prev,
             [sourceId]: (prev[sourceId] || "") + text
         }));
+    };
+
+    const addNoteToStudio = (noteId: string) => {
+        if (!selectedSongwriterNotes.includes(noteId)) {
+            const newSelectedNotes = [...selectedSongwriterNotes, noteId];
+            updateSelectedSongwriterNotes(newSelectedNotes);
+        }
+    };
+
+    const removeNoteFromStudio = (noteId: string) => {
+        const newSelectedNotes = selectedSongwriterNotes.filter(id => id !== noteId);
+        updateSelectedSongwriterNotes(newSelectedNotes);
+    };
+
+    const getLyricNotes = (notes: Note[]): Note[] => {
+        return notes.filter(n => n.type === 'lyric');
     };
 
     const handleSyncScroll = (e: React.UIEvent<HTMLDivElement>, index: number) => {
@@ -62,13 +109,18 @@ export function useMusicStudio() {
         }
     };
 
+    const saveCompositionToLocalStorage = () => {
+        localStorage.setItem('ainotes_composition', compositionContent);
+    };
+
     return {
-        isSongwriterMode, setIsSongwriterMode, selectedSongwriterNotes, setSelectedSongwriterNotes,
-        compositionContent, setCompositionContent: updateCompositionContent, 
-        sourceNoteContents, setSourceNoteContents, scrollSyncRefs, syncScrollEnabled, 
-        setSyncScrollEnabled, syncScrollMode, setSyncScrollMode, activeScrollIndex, 
-        showRhymeAnalyzer, setShowRhymeAnalyzer, rhymeAnalysis, isAnalyzingRhyme, 
+        isSongwriterMode, setIsSongwriterMode, selectedSongwriterNotes, setSelectedSongwriterNotes: updateSelectedSongwriterNotes,
+        compositionContent, setCompositionContent: updateCompositionContent,
+        sourceNoteContents, setSourceNoteContents: updateSourceNoteContents, scrollSyncRefs, syncScrollEnabled,
+        setSyncScrollEnabled, syncScrollMode, setSyncScrollMode, activeScrollIndex,
+        showRhymeAnalyzer, setShowRhymeAnalyzer, rhymeAnalysis, isAnalyzingRhyme,
         autoNumbering, setAutoNumbering, showLyricModal, setShowLyricModal,
-        addTextToComposition, handleSyncScroll, handleAnalyzeRhyme
+        addTextToComposition, handleSyncScroll, handleAnalyzeRhyme,
+        addNoteToStudio, removeNoteFromStudio, getLyricNotes, saveCompositionToLocalStorage
     };
 }

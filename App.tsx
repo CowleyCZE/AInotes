@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useMemo, useEffect, useState, useRef } from 'react';
 import { useNotes } from './hooks/useNotes';
 import { useChat } from './hooks/useChat';
 import { useMusicStudio } from './hooks/useMusicStudio';
@@ -21,6 +21,7 @@ export default function App() {
     const uiHook = useUI();
     const audioHook = useAudioRecorder();
     const [isTranscribing, setIsTranscribing] = useState(false);
+    const contentAreaRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const processAudio = async () => {
@@ -50,6 +51,10 @@ export default function App() {
             }
         });
         return Array.from(tagSet);
+    }, [notesHook.notes]);
+
+    const lyricNotes = useMemo(() => {
+        return notesHook.notes.filter(n => n.type === 'lyric');
     }, [notesHook.notes]);
 
     const filteredNotes = useMemo(() => {
@@ -154,14 +159,64 @@ export default function App() {
                         </nav>
                     </>
                 ) : (
-                    <div className="flex-grow flex flex-col items-center justify-center text-center p-4">
-                        <div className="w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mb-4">
-                            <MusicIcon className="h-8 w-8 text-purple-400" />
-                        </div>
-                        <h3 className="text-sm font-bold text-gray-300 mb-2">Songwriter Studio</h3>
-                        <p className="text-xs text-gray-500 leading-relaxed">
-                            Zde uvidíte zdroje pro aktuální projekt.
-                        </p>
+                    <div className="flex-grow flex flex-col p-4 overflow-y-auto custom-scrollbar">
+                        <button
+                            onClick={() => notesHook.createNewNote(notesHook.selectedCategoryId === "all" ? "lyrics" : notesHook.selectedCategoryId, 'lyric')}
+                            className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-purple-600/20 transition-all hover:scale-[1.02] mb-4 flex items-center justify-center gap-2"
+                        >
+                            <PlusIcon className="h-5 w-5" /> Nový text skladby
+                        </button>
+
+                        <div className="text-[10px] font-black text-gray-600 uppercase tracking-widest mb-2 px-1">Moje texty</div>
+                        
+                        {lyricNotes.length === 0 ? (
+                            <p className="text-xs text-gray-600 text-center py-4">Zatím nemáte žádné texty.</p>
+                        ) : (
+                            <div className="space-y-1">
+                                {lyricNotes.map(note => (
+                                    <div
+                                        key={note.id}
+                                        className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors ${musicHook.selectedSongwriterNotes.includes(note.id) ? 'bg-purple-600/20 border border-purple-500' : 'bg-gray-800/50 hover:bg-gray-800'}`}
+                                    >
+                                        <div
+                                            onClick={() => notesHook.setSelectedNoteId(note.id)}
+                                            className="flex-1 min-w-0"
+                                        >
+                                            <h4 className="text-xs font-bold text-gray-300 truncate">{note.title || 'Bez názvu'}</h4>
+                                            <p className="text-[10px] text-gray-500 truncate">{note.content?.substring(0, 30) ?? ''}...</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 ml-2">
+                                            {musicHook.selectedSongwriterNotes.includes(note.id) ? (
+                                                <button
+                                                    onClick={() => musicHook.removeNoteFromStudio(note.id)}
+                                                    className="p-1 text-purple-400 hover:text-purple-300"
+                                                    title="Odebrat ze studia"
+                                                >
+                                                    <XIcon className="h-3 w-3" />
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => musicHook.addNoteToStudio(note.id)}
+                                                    className="p-1 text-gray-500 hover:text-purple-400"
+                                                    title="Přidat do studia"
+                                                >
+                                                    <PlusIcon className="h-3 w-3" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {musicHook.selectedSongwriterNotes.length > 0 && (
+                            <button
+                                onClick={() => musicHook.setIsSongwriterMode(true)}
+                                className="mt-4 w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold py-2 rounded-xl shadow-lg transition-all hover:scale-[1.02] flex items-center justify-center gap-2"
+                            >
+                                <MusicIcon className="h-4 w-4" /> Otevřít studio ({musicHook.selectedSongwriterNotes.length})
+                            </button>
+                        )}
                     </div>
                 )}
             </aside>
@@ -254,7 +309,7 @@ export default function App() {
                         setCreativeModel={() => {}}
                     />
                 ) : notesHook.selectedNote ? (
-                    <NoteView 
+                    <NoteView
                         selectedNote={notesHook.selectedNote} isEditing={notesHook.isEditing}
                         editingTitle={notesHook.editingTitle} setEditingTitle={notesHook.setEditingTitle}
                         editingContent={notesHook.editingContent} setEditingContent={notesHook.setEditingContent}
@@ -269,14 +324,22 @@ export default function App() {
                             notesHook.setIsEditing(false);
                         }}
                         handleSaveNote={notesHook.handleSaveNote}
+                        handleDeleteNote={(noteId: string) => {
+                            // Nejprve odstranit ze studia pokud je tam poznámka
+                            if (musicHook.selectedSongwriterNotes.includes(noteId)) {
+                                musicHook.removeNoteFromStudio(noteId);
+                            }
+                            // Pak smazat poznámku
+                            notesHook.handleDeleteNote(noteId);
+                        }}
                         setIsFocusMode={uiHook.setIsFocusMode}
                         autoTitle={notesHook.handleAutoTitle}
                         handleUndo={() => notesHook.restoreVersion(0)}
                         handleFindConnections={notesHook.handleFindConnections}
-                        isLinkingLoading={notesHook.isLinkingLoading} setNoteToDeleteId={notesHook.setNoteToDeleteId}
+                        isLinkingLoading={notesHook.isLinkingLoading}
                         toggleChatMode={() => chatHook.setIsChatMode(true)} saveStatus={notesHook.saveStatus}
                         error={null}
-                        contentAreaRef={React.createRef()} handleMouseUp={() => {}}
+                        contentAreaRef={contentAreaRef} handleMouseUp={() => {}}
                         toolbarPosition={uiHook.toolbarPosition} handleCopyText={async () => {}}
                         handleAIAction={async () => {}} isAIActionLoading={false}
                         handleAIProcess={async () => {}} isLoadingAI={false}

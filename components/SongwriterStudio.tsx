@@ -30,6 +30,7 @@ interface SongwriterStudioProps {
     saveCompositionToLocalStorage: () => void;
     creativeModel: string;
     setCreativeModel: (val: string) => void;
+    removeNoteFromStudio: (noteId: string) => void;
 }
 
 const songwriterColors = ['bg-purple-900/40 border-purple-500', 'bg-teal-900/40 border-teal-500', 'bg-green-900/40 border-green-500', 'bg-orange-900/40 border-orange-500'];
@@ -58,7 +59,8 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
     setCompositionContent,
     saveCompositionToLocalStorage,
     creativeModel,
-    setCreativeModel
+    setCreativeModel,
+    removeNoteFromStudio
 }) => {
     const isGridMode = selectedSongwriterNotes.length > 2;
 
@@ -260,7 +262,16 @@ export const SongwriterStudio: React.FC<SongwriterStudioProps> = ({
                                </div>
                                <div className="absolute bottom-0 left-0 right-0 bg-black/40 p-2 text-xs flex justify-between items-center text-gray-400 border-t border-gray-700/30 backdrop-blur-sm">
                                    <span className="font-bold text-gray-200 truncate pr-2">{note.title}</span>
-                                   <span className="whitespace-nowrap flex items-center"><ClockIcon className="mr-1 h-3 w-3"/> {formatDate(note.updatedAt)}</span>
+                                   <div className="flex items-center gap-2">
+                                       <span className="whitespace-nowrap flex items-center"><ClockIcon className="mr-1 h-3 w-3"/> {formatDate(note.updatedAt)}</span>
+                                       <button
+                                           onClick={() => removeNoteFromStudio(noteId)}
+                                           className="text-gray-500 hover:text-red-400 transition"
+                                           title="Odebrat ze studia"
+                                       >
+                                           <XIcon className="h-3 w-3"/>
+                                       </button>
+                                   </div>
                                </div>
                            </div>
                        );
