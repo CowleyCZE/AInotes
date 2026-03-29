@@ -61,10 +61,11 @@ export function useMusicStudio() {
     const addTextToComposition = (text: string, sourceId: string) => {
         const newContent = compositionContent + `\n\n[Zdroj: ${sourceId}]\n${text}`;
         updateCompositionContent(newContent);
-        updateSourceNoteContents(prev => ({
-            ...prev,
-            [sourceId]: (prev[sourceId] || "") + text
-        }));
+        const newSourceContents = {
+            ...sourceNoteContents,
+            [sourceId]: (sourceNoteContents[sourceId] || "") + text
+        };
+        updateSourceNoteContents(newSourceContents);
     };
 
     const addNoteToStudio = (noteId: string) => {

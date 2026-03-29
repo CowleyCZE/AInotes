@@ -1,0 +1,58 @@
+
+> chytrý-zápisník-ai@0.0.0 test
+> vitest --run
+
+
+[1m[46m RUN [49m[22m [36mv4.1.1 [39m[90m/home/cowley/Dokumenty/projekty/AInotes[39m
+
+ [32m✓[39m tests/CategoryTree.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 302[2mms[22m[39m
+ [32m✓[39m hooks/useNotes.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 96[2mms[22m[39m
+ [32m✓[39m tests/SimpleMarkdownRenderer.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 687[2mms[22m[39m
+     [33m[2m✓[22m[39m should render tables (GFM) [33m 460[2mms[22m[39m
+ [32m✓[39m hooks/useUI.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 74[2mms[22m[39m
+ [32m✓[39m hooks/useMusicStudio.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 107[2mms[22m[39m
+ [32m✓[39m hooks/useChat.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 123[2mms[22m[39m
+ [32m✓[39m tests/utils.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 156[2mms[22m[39m
+ [32m✓[39m hooks/useAudioRecorder.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 63[2mms[22m[39m
+[90mstdout[2m | tests/geminiService.test.ts[2m > [22m[2mGeminiService[2m > [22m[2mshould process note with AI and return structured data
+[22m[39m[Gemini] Používám API: gemini-1.5-flash
+[Ollama] Volám model: qwen2.5-coder:0.5b
+
+[90mstderr[2m | tests/geminiService.test.ts[2m > [22m[2mGeminiService[2m > [22m[2mshould process note with AI and return structured data
+[22m[39mGemini API failed, falling back to Ollama: TypeError: client.getGenerativeModel is not a function
+    at callAI [90m(/home/cowley/Dokumenty/projekty/AInotes/[39mservices/geminiService.ts:61:43[90m)[39m
+    at processNoteWithAI [90m(/home/cowley/Dokumenty/projekty/AInotes/[39mservices/geminiService.ts:107:26[90m)[39m
+    at [90m/home/cowley/Dokumenty/projekty/AInotes/[39mtests/geminiService.test.ts:27:30
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1893:26
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2316:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2313:10[90m)[39m
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2295:20
+    at new Promise (<anonymous>)
+
+[90mstdout[2m | tests/geminiService.test.ts[2m > [22m[2mGeminiService[2m > [22m[2mshould handle AI quick actions
+[22m[39m[Gemini] Používám API: gemini-1.5-flash
+[Ollama] Volám model: qwen2.5:1.5b
+
+[90mstderr[2m | tests/geminiService.test.ts[2m > [22m[2mGeminiService[2m > [22m[2mshould handle AI quick actions
+[22m[39mGemini API failed, falling back to Ollama: TypeError: client.getGenerativeModel is not a function
+    at callAI [90m(/home/cowley/Dokumenty/projekty/AInotes/[39mservices/geminiService.ts:61:43[90m)[39m
+    at performAIQuickAction [90m(/home/cowley/Dokumenty/projekty/AInotes/[39mservices/geminiService.ts:140:18[90m)[39m
+    at [90m/home/cowley/Dokumenty/projekty/AInotes/[39mtests/geminiService.test.ts:46:30
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:302:11
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:1893:26
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2316:20
+    at new Promise (<anonymous>)
+    at runWithCancel [90m(file:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2313:10[90m)[39m
+    at [90mfile:///home/cowley/Dokumenty/projekty/AInotes/[39mnode_modules/[4m@vitest/runner[24m/dist/chunk-artifact.js:2295:20
+    at new Promise (<anonymous>)
+
+ [32m✓[39m tests/geminiService.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 38[2mms[22m[39m
+ [32m✓[39m tests/firebaseService.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m10 passed[39m[22m[90m (10)[39m
+[2m      Tests [22m [1m[32m36 passed[39m[22m[90m (36)[39m
+[2m   Start at [22m 01:01:25
+[2m   Duration [22m 14.70s[2m (transform 1.36s, setup 2.13s, import 5.33s, tests 1.66s, environment 25.74s)[22m
+

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "node",
+      "args": ["../playwright/server.js"],
+      "description": "Playwright MCP Server for Testing & Browser Automation",
+      "disabled": false,
+      "alwaysAllow": ["browser_navigate", "browser_snapshot", "browser_click", "browser_type"]
+    }
+  }
+}
