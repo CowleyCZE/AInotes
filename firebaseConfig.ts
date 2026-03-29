@@ -7,15 +7,13 @@ import * as firestore from "firebase/firestore";
 // Vaše konfigurace webové aplikace z Firebase konzole.
 // Ujistěte se, že tyto hodnoty odpovídají vašemu projektu.
 const firebaseConfig = {
-    apiKey: "AIzaSyBfp6tuNrfvohzKeqQy9ORoh9O50VAXmsY",
-    authDomain: "chytryzapisnikai.firebaseapp.com",
-    projectId: "chytryzapisnikai",
-    storageBucket: "chytryzapisnikai.firebasestorage.app",
-    messagingSenderId: "810839343258",
-    appId: "1:810839343258:web:ee78ed76deaa8531bb5f23",
-    // Measurement ID je pro Google Analytics, všiml jsem si, že jsi ho tam měl.
-    // Pro správné fungování Analytics bys měl také importovat `getAnalytics` a inicializovat ji.
-    measurementId: "G-JK4XKOHZOR"
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Inicializace Firebase aplikace

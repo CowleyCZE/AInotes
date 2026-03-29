@@ -8,7 +8,7 @@ export const CREATIVE_OLLAMA_MODEL = 'qwen2.5:1.5b';       // Pro text, chat a r
 const FALLBACK_OLLAMA_MODEL = 'qwen2.5:0.5b';
 
 // Gemini configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const client = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 const GEMINI_MODEL = "gemini-1.5-flash";
 
